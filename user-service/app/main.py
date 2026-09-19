@@ -15,6 +15,7 @@ from .database import Database, DuplicateEmailError
 from .api_schemas import (
     LoginRequest,
     LoginResponse,
+    ProfileUpdateRequest,
     RegistrationRequest,
     UserResponse,
 )
@@ -76,7 +77,7 @@ def create_app(
     ) -> JSONResponse:
         errors = []
         for item in error.errors():
-            field = str(item["loc"][-1])
+            field = str(item["loc"][-1]) if item["loc"] else "body"
             message = item["msg"]
             if message.startswith("Value error, "):
                 message = message.removeprefix("Value error, ")
@@ -197,5 +198,59 @@ def create_app(
                 "account_status": user["account_status"],
             },
         }
+
+    def authenticated_user(request: Request) -> dict[str, object]:
+        authorization = request.headers.get("Authorization", "")
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not token or token != token.strip():
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        try:
+            claims = jwt.decode(
+                token,
+                signing_secret,
+                algorithms=["HS256"],
+                options={"require": ["sub", "exp"]},
+            )
+        except jwt.PyJWTError as error:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token.",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from error
+        user_id = claims["sub"]
+        if not isinstance(user_id, str) or not user_id:
+            raise HTTPException(status_code=401, detail="Invalid authentication token.")
+        user = database.find_user_profile(user_id)
+        if not user or user["account_status"] != "ACTIVE":
+            raise HTTPException(status_code=401, detail="Invalid authentication token.")
+        return user
+
+    @app.get("/api/v1/users/{user_id}", response_model=UserResponse)
+    def get_user_profile(user_id: str, request: Request):
+        actor = authenticated_user(request)
+        if user_id == actor["id"]:
+            target = actor
+        else:
+            raise HTTPException(status_code=403, detail="Cannot access another user's profile.")
+        return target
+
+    @app.patch("/api/v1/users/{user_id}", response_model=UserResponse)
+    def update_user_profile(user_id: str, request: Request, body: dict[str, object] = Body(...)):
+        actor = authenticated_user(request)
+        if user_id == actor["id"]:
+            target = actor
+        else:
+            raise HTTPException(status_code=403, detail="Cannot access another user's profile.")
+        try:
+            update_request = ProfileUpdateRequest.model_validate(body)
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from error
+        return database.update_user_profile(
+            target["id"], update_request.model_dump(exclude_unset=True)
+        )
 
     return app

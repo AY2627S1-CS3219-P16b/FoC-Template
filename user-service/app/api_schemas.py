@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
 NUS_EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9]+@u\.nus\.edu$", re.IGNORECASE)
@@ -113,3 +113,36 @@ class LoginResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
     user: AuthenticatedUserResponse
+
+
+class ProfileUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = None
+    contact_preference: str | None = None
+    telegram_handle: str | None = None
+    phone_number: str | None = None
+    profile_picture_url: str | None = None
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, value: str | None) -> str:
+        if value is None:
+            raise ValueError("must not be null")
+        return RegistrationRequest.validate_display_name(value)
+
+    @field_validator(
+        "contact_preference",
+        "telegram_handle",
+        "phone_number",
+        "profile_picture_url",
+    )
+    @classmethod
+    def normalize_optional_field(cls, value: str | None) -> str | None:
+        return RegistrationRequest.turn_blank_optional_fields_into_none(value)
+
+    @model_validator(mode="after")
+    def require_a_field(self):
+        if not self.model_fields_set:
+            raise ValueError("at least one profile field is required")
+        return self
