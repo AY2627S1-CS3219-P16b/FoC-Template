@@ -17,6 +17,7 @@ from .api_schemas import (
     LoginResponse,
     ProfileUpdateRequest,
     RegistrationRequest,
+    RoleModeUpdateRequest,
     UserResponse,
 )
 
@@ -252,5 +253,30 @@ def create_app(
         return database.update_user_profile(
             target["id"], update_request.model_dump(exclude_unset=True)
         )
+
+    @app.patch(
+        "/api/v1/users/{user_id}/role-mode",
+        response_model=UserResponse,
+        openapi_extra={
+            "requestBody": {
+                "content": {
+                    "application/json": {"schema": RoleModeUpdateRequest.model_json_schema()}
+                },
+                "required": True,
+            }
+        },
+    )
+    def update_role_mode(user_id: str, request: Request, body: dict[str, object] = Body(...)):
+        actor = authenticated_user(request)
+        if user_id != actor["id"]:
+            raise HTTPException(status_code=403, detail="Cannot change another user's role-mode.")
+        try:
+            update_request = RoleModeUpdateRequest.model_validate(body)
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from error
+        updated = database.update_active_role_mode(user_id, update_request.active_role_mode)
+        if not updated:
+            raise HTTPException(status_code=401, detail="Invalid authentication token.")
+        return updated
 
     return app

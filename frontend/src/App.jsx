@@ -16,6 +16,7 @@ import {
   getUserProfile,
   loginUser,
   registerUser,
+  updateUserRoleMode,
   updateUserProfile,
 } from "./api/users";
 
@@ -528,12 +529,28 @@ export default function App() {
   // Current logged in user (NUS student)
   const [user, setUser] = useState(initialUser);
   const [profileError, setProfileError] = useState("");
+  const [roleError, setRoleError] = useState("");
+  const [switchingRole, setSwitchingRole] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
     getUserProfile(accessToken, user.id)
       .then((profile) => {
         setUser(profileToUser(profile));
+        setRole(profile.active_role_mode);
+        setActiveTab((current) => {
+          if (
+            profile.active_role_mode === "COURIER" &&
+            ["suppliers", "my-requests"].includes(current)
+          )
+            return "courier-browse";
+          if (
+            profile.active_role_mode === "REQUESTER" &&
+            ["courier-browse", "courier-active"].includes(current)
+          )
+            return "suppliers";
+          return current;
+        });
         localStorage.setItem(
           "foc_user",
           JSON.stringify({
@@ -555,6 +572,38 @@ export default function App() {
     setProfileError("");
   };
 
+  const handleRoleChange = async (mode) => {
+    if (switchingRole) return; // disable role switching while already in progress
+    const nextTab = mode === "COURIER" ? "courier-browse" : "suppliers";
+    if (mode === role) {
+      setActiveTab(nextTab);
+      return;
+    }
+    setSwitchingRole(true);
+    setRoleError("");
+    try {
+      const profile = await updateUserRoleMode(accessToken, user.id, mode);
+      setUser(profileToUser(profile));
+      setRole(profile.active_role_mode);
+      setActiveTab(nextTab);
+      localStorage.setItem(
+        "foc_user",
+        JSON.stringify({
+          id: profile.id,
+          display_name: profile.display_name,
+          email: profile.email,
+          auth_role: profile.auth_role,
+          active_role_mode: profile.active_role_mode,
+          account_status: profile.account_status,
+        }),
+      );
+    } catch (error) {
+      setRoleError(error.message);
+    } finally {
+      setSwitchingRole(false);
+    }
+  };
+
   // Main UI States
   const screen = new URLSearchParams(window.location.search).get("screen");
   const initialTab =
@@ -570,17 +619,9 @@ export default function App() {
       assignment: "courier-active",
       credits: "credits",
       profile: "profile",
-    }[screen] || "suppliers";
-  const initialRole = [
-    "courier",
-    "openOrders",
-    "open-orders",
-    "courier-orders",
-    "assignment",
-  ].includes(screen)
-    ? "COURIER"
-    : "REQUESTER";
-  const [role, setRole] = useState(initialRole); // 'REQUESTER' | 'COURIER'
+    }[screen] ||
+    (user.activeRoleMode === "COURIER" ? "courier-browse" : "suppliers");
+  const [role, setRole] = useState(user.activeRoleMode); // 'REQUESTER' | 'COURIER'
   const [activeTab, setActiveTab] = useState(initialTab); // 'suppliers', 'my-requests', 'courier-browse', 'courier-active', 'credits', 'profile'
 
   // Data States
@@ -740,7 +781,9 @@ export default function App() {
       <>
         <Navbar
           role={role}
-          setRole={setRole}
+          setRole={handleRoleChange}
+          roleError={roleError}
+          switchingRole={switchingRole}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           availableCredits={availableCredits}
@@ -765,8 +808,10 @@ export default function App() {
     return (
       <>
         <Navbar
-          role="COURIER"
-          setRole={setRole}
+          role={role}
+          setRole={handleRoleChange}
+          roleError={roleError}
+          switchingRole={switchingRole}
           activeTab="courier-browse"
           setActiveTab={setActiveTab}
           availableCredits={availableCredits}
@@ -784,8 +829,10 @@ export default function App() {
     return (
       <>
         <Navbar
-          role="REQUESTER"
-          setRole={setRole}
+          role={role}
+          setRole={handleRoleChange}
+          roleError={roleError}
+          switchingRole={switchingRole}
           activeTab="my-requests"
           setActiveTab={setActiveTab}
           availableCredits={availableCredits}
@@ -801,7 +848,9 @@ export default function App() {
       {/* Top Navigation */}
       <Navbar
         role={role}
-        setRole={setRole}
+        setRole={handleRoleChange}
+        roleError={roleError}
+        switchingRole={switchingRole}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         availableCredits={availableCredits}
@@ -862,7 +911,8 @@ export default function App() {
             onUpdateUser={handleProfileUpdate}
             loadError={profileError}
             role={role}
-            setRole={setRole}
+            setRole={handleRoleChange}
+            switchingRole={switchingRole}
             availableCredits={availableCredits}
           />
         )}

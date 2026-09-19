@@ -117,6 +117,22 @@ class Database:
             ).one()
         return dict(row._mapping)
 
+    def update_active_role_mode(
+        self, user_id: str, role_mode: str
+    ) -> dict[str, object] | None:
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                update(users)
+                .where(users.c.id == user_id, users.c.account_status == "ACTIVE")
+                .values(active_role_mode=role_mode)
+            )
+            if result.rowcount == 0:
+                return None
+            row = connection.execute(
+                select(*profile_columns).where(users.c.id == user_id)
+            ).one()
+        return dict(row._mapping)
+
     def update_account_status(self, email: str, account_status: str) -> None:
         with self.engine.begin() as connection:
             connection.execute(

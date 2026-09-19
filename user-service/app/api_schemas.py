@@ -146,3 +146,9 @@ class ProfileUpdateRequest(BaseModel):
         if not self.model_fields_set:
             raise ValueError("at least one profile field is required")
         return self
+
+
+class RoleModeUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    active_role_mode: Literal["REQUESTER", "COURIER"]
