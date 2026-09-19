@@ -7,6 +7,7 @@ import CourierOrdersSection from "./components/CourierOrdersSection";
 import CourierActiveSection from "./components/CourierActiveSection";
 import CreditsSection from "./components/CreditsSection";
 import ProfileSection from "./components/ProfileSection";
+import AdminSection from "./components/AdminSection";
 import {
   initialSuppliers,
   initialOrders,
@@ -619,6 +620,7 @@ export default function App() {
       assignment: "courier-active",
       credits: "credits",
       profile: "profile",
+      admin: "admin",
     }[screen] ||
     (user.activeRoleMode === "COURIER" ? "courier-browse" : "suppliers");
   const [role, setRole] = useState(user.activeRoleMode); // 'REQUESTER' | 'COURIER'
@@ -915,6 +917,9 @@ export default function App() {
             switchingRole={switchingRole}
             availableCredits={availableCredits}
           />
+        )}
+        {activeTab === "admin" && user.authRole === "ADMIN" && (
+          <AdminSection token={accessToken} currentUserId={user.id} />
         )}
       </main>
 

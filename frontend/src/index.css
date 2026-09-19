@@ -315,6 +315,105 @@ body {
   margin-bottom: 12px;
 }
 
+.admin-divider {
+  border: 0;
+  border-top: 1px solid #cccccc;
+  margin: 20px 0;
+}
+
+.audit-heading,
+.audit-entry-header,
+.audit-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.audit-heading {
+  margin-bottom: 14px;
+}
+
+.audit-heading span,
+.audit-entry-header time {
+  color: #4d5570;
+  font-size: 12px;
+}
+
+.audit-entry {
+  border: 1px solid #d8dce5;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.audit-entry-header {
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eeeeee;
+}
+
+.audit-entry-header strong {
+  color: #232958;
+}
+
+.audit-people {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.audit-people h4 {
+  color: #232958;
+  margin-bottom: 5px;
+}
+
+.audit-people dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.audit-people dt {
+  color: #4d5570;
+}
+
+.audit-people dt::after {
+  content: ":";
+}
+
+.audit-people dd {
+  font-weight: 600;
+}
+
+.audit-changes {
+  border-top: 1px solid #eeeeee;
+  padding-top: 10px;
+}
+
+.audit-change + .audit-change {
+  margin-top: 10px;
+}
+
+.audit-change {
+  overflow-wrap: anywhere;
+}
+
+.audit-change-values {
+  color: #4d5570;
+  margin-top: 3px;
+}
+
+.audit-reason {
+  margin-top: 10px;
+}
+
+.audit-pagination {
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
 .form-group label {
   display: block;
   font-weight: bold;

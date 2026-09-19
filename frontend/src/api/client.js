@@ -1,14 +1,15 @@
-export async function sendAuthenticatedRequest(url, { token, method, data, errorMessage }) {
-  const headers = { Authorization: `Bearer ${token}` };
+// `headers` is optional and holds endpoint-specific headers, such as an admin reason.
+export async function sendAuthenticatedRequest(url, { token, method, data, errorMessage, headers }) {
+  const requestHeaders = { ...(headers ?? {}), Authorization: `Bearer ${token}` };
   if (data !== undefined) {
-    headers["Content-Type"] = "application/json";
+    requestHeaders["Content-Type"] = "application/json";
   }
 
   let response;
   try {
     response = await fetch(url, {
       method,
-      headers,
+      headers: requestHeaders,
       ...(data !== undefined ? { body: JSON.stringify(data) } : {}),
     });
   } catch {

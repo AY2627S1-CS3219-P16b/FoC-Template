@@ -8,6 +8,7 @@ export default function Navbar({
   activeTab,
   setActiveTab,
   availableCredits,
+  user,
   onLogout,
 }) {
   return (
@@ -85,6 +86,14 @@ export default function Navbar({
             >
               Profile
             </button>
+            {user?.authRole === 'ADMIN' && (
+              <button
+                className={`nav-tab ${activeTab === 'admin' ? 'active' : ''}`}
+                onClick={() => setActiveTab('admin')}
+              >
+                Admin
+              </button>
+            )}
           </nav>
 
           <button
