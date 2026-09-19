@@ -39,7 +39,11 @@ export default function ProfileSection({
           </div>
 
           <div style={{ marginBottom: '8px' }}>
-            <strong>Status:</strong> <span className="badge badge-completed">ACTIVE</span>
+            <strong>Status:</strong> <span className="badge badge-completed">{user.accountStatus || 'ACTIVE'}</span>
+          </div>
+
+          <div style={{ marginBottom: '8px' }}>
+            <strong>Authorization role:</strong> {user.authRole || 'USER'}
           </div>
 
           <div style={{ marginBottom: '12px' }}>

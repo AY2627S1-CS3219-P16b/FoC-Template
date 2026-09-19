@@ -12,40 +12,280 @@ import {
   initialOrders,
   initialTransactions,
 } from "./data/mockData";
+import { loginUser, registerUser } from "./api/users";
 
 function goToScreen(screen) {
   window.location.href = `?screen=${screen}`;
 }
 
-function SimpleField({ label, type = "text", placeholder, required = false }) {
+function getStoredAccessToken() {
+  const token = localStorage.getItem("foc_access_token");
+  if (!token) return null;
+
+  try {
+    const encodedPayload = token.split(".")[1];
+    const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+    const paddedBase64 = base64.padEnd(
+      base64.length + ((4 - (base64.length % 4)) % 4),
+      "=",
+    );
+    const payload = JSON.parse(atob(paddedBase64));
+
+    if (!payload.exp || payload.exp * 1000 <= Date.now()) {
+      localStorage.removeItem("foc_access_token");
+      localStorage.removeItem("foc_user");
+      return null;
+    }
+
+    return token;
+  } catch {
+    localStorage.removeItem("foc_access_token");
+    localStorage.removeItem("foc_user");
+    return null;
+  }
+}
+
+function PublicHeader() {
+  return (
+    <header className="landing-header">
+      <span className="landing-brand">Friend on Campus</span>
+      <span className="landing-brand-mark">FoC</span>
+    </header>
+  );
+}
+
+function LandingPage() {
+  return (
+    <div className="landing-page">
+      <PublicHeader />
+      <main className="landing-main">
+        <section className="landing-card" aria-labelledby="landing-title">
+          <h1 id="landing-title">Campus errands, shared.</h1>
+          <p>
+            Request an errand from around campus or help another student by
+            completing one.
+          </p>
+          <div className="landing-actions">
+            <button
+              className="btn btn-primary landing-button"
+              onClick={() => goToScreen("login")}
+            >
+              Log in
+            </button>
+            <button
+              className="btn btn-secondary landing-button"
+              onClick={() => goToScreen("register")}
+            >
+              Create account
+            </button>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function initialUser() {
+  try {
+    const authenticatedUser = JSON.parse(localStorage.getItem("foc_user"));
+    if (authenticatedUser?.id) {
+      return {
+        id: authenticatedUser.id,
+        name: authenticatedUser.display_name,
+        email: authenticatedUser.email,
+        telegram: "",
+        authRole: authenticatedUser.auth_role,
+        activeRoleMode: authenticatedUser.active_role_mode,
+        accountStatus: authenticatedUser.account_status,
+      };
+    }
+  } catch {
+    localStorage.removeItem("foc_user");
+  }
+
+  return {
+    id: "usr-1",
+    name: "Student User",
+    email: "student1@u.nus.edu",
+    telegram: "@student1",
+    authRole: "USER",
+    activeRoleMode: "REQUESTER",
+    accountStatus: "ACTIVE",
+  };
+}
+
+function SimpleField({
+  label,
+  name,
+  type = "text",
+  placeholder,
+  required = false,
+  value,
+  onChange,
+  error,
+}) {
   return (
     <div className="form-group">
-      <label>{label}{required ? " *" : ""}</label>
-      <input type={type} placeholder={placeholder} required={required} />
+      <label htmlFor={name}>{label}{required ? " *" : ""}</label>
+      <input
+        id={name}
+        name={name}
+        type={type}
+        placeholder={placeholder}
+        required={required}
+        value={value}
+        onChange={onChange}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${name}-error` : undefined}
+      />
+      {error && <div id={`${name}-error`} className="field-error">{error}</div>}
+    </div>
+  );
+}
+
+function SelectField({ label, name, value, onChange, options, error }) {
+  return (
+    <div className="form-group">
+      <label htmlFor={name}>{label}</label>
+      <select
+        id={name}
+        name={name}
+        value={value}
+        onChange={onChange}
+        aria-invalid={Boolean(error)}
+        aria-describedby={error ? `${name}-error` : undefined}
+      >
+        <option value="">Select a method (optional)</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {error && <div id={`${name}-error`} className="field-error">{error}</div>}
     </div>
   );
 }
 
 function AuthScreen({ registration }) {
-  return (
-    <main className="main-content auth-screen">
-      <div className="auth-panel">
-        <h1>{registration ? "Create Account" : "Log In"}</h1>
-        <p className="auth-help">{registration ? "Create an account with your NUS email." : "Sign in to Friend on Campus."}</p>
-        <form onSubmit={(event) => { event.preventDefault(); goToScreen(registration ? "profile" : "suppliers"); }}>
-          <SimpleField label="NUS email" type="email" placeholder="name@u.nus.edu" required />
-          {registration && <SimpleField label="Display name" placeholder="Your name" required />}
-          <SimpleField label="Password" type="password" placeholder="Password" required />
-          {registration && <div className="field-error">Password must contain at least 8 characters.</div>}
-          <button type="submit" className="btn btn-primary btn-block">{registration ? "Register" : "Log in"}</button>
-        </form>
-        <div className="auth-divider" />
-        <button className="btn btn-secondary btn-block" onClick={() => goToScreen(registration ? "login" : "register")}>
-          {registration ? "Back to login" : "Create an account"}
-        </button>
-        {!registration && <div className="action-error">Invalid email or password.</div>}
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+    display_name: "",
+    contact_preference: "",
+    telegram_handle: "",
+    phone_number: "",
+    profile_picture_url: "",
+  });
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [actionError, setActionError] = useState("");
+  const [registered, setRegistered] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleChange = ({ target: { name, value } }) => {
+    setForm((current) => ({ ...current, [name]: value }));
+    setFieldErrors((current) => ({ ...current, [name]: undefined }));
+    setActionError("");
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setSubmitting(true);
+    setFieldErrors({});
+    setActionError("");
+    try {
+      if (registration) {
+        await registerUser(form);
+        setRegistered(true);
+      } else {
+        const session = await loginUser({
+          email: form.email,
+          password: form.password,
+        });
+        localStorage.setItem("foc_access_token", session.access_token);
+        localStorage.setItem("foc_user", JSON.stringify(session.user));
+        goToScreen(
+          session.user.active_role_mode === "COURIER"
+            ? "courier-orders"
+            : "suppliers",
+        );
+      }
+    } catch (error) {
+      setFieldErrors(error.fieldErrors || {});
+      if (!error.fieldErrors || Object.keys(error.fieldErrors).length === 0) {
+        setActionError(error.message);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (registration && registered) {
+    return (
+      <div className="landing-page auth-page">
+        <PublicHeader />
+        <main className="landing-main auth-screen">
+          <div className="auth-panel">
+            <h1>Account created</h1>
+            <div className="success-message" role="status">
+              Your NUS student account is ready.
+            </div>
+            <button className="btn btn-primary btn-block" onClick={() => goToScreen("login")}>
+              Continue to log in
+            </button>
+          </div>
+        </main>
       </div>
-    </main>
+    );
+  }
+
+  return (
+    <div className="landing-page auth-page">
+      <PublicHeader />
+      <main className="landing-main auth-screen">
+        <div className="auth-panel">
+          <h1>{registration ? "Create Account" : "Log In"}</h1>
+          <p className="auth-help">{registration ? "Create an account with your NUS email." : "Sign in to Friend on Campus."}</p>
+          <form onSubmit={handleSubmit} noValidate>
+            <SimpleField label="NUS email" name="email" type="email" placeholder="e0123456@u.nus.edu" required value={form.email} onChange={handleChange} error={fieldErrors.email} />
+            {registration && <SimpleField label="Display name" name="display_name" placeholder="Your name" required value={form.display_name} onChange={handleChange} error={fieldErrors.display_name} />}
+            <SimpleField label="Password" name="password" type="password" placeholder="Password" required value={form.password} onChange={handleChange} error={fieldErrors.password} />
+            {registration && (
+              <>
+                <p className="password-help">Use at least 10 characters with uppercase, lowercase, a number, and a symbol.</p>
+                <details className="optional-fields">
+                  <summary>Optional profile details</summary>
+                  <SelectField
+                    label="Preferred contact method"
+                    name="contact_preference"
+                    value={form.contact_preference}
+                    onChange={handleChange}
+                    error={fieldErrors.contact_preference}
+                    options={[
+                      { value: "TELEGRAM", label: "Telegram" },
+                      { value: "EMAIL", label: "Email" },
+                      { value: "PHONE", label: "Phone" },
+                    ]}
+                  />
+                  <SimpleField label="Telegram handle" name="telegram_handle" placeholder="@username" value={form.telegram_handle} onChange={handleChange} error={fieldErrors.telegram_handle} />
+                  <SimpleField label="Phone number" name="phone_number" type="tel" placeholder="Phone number" value={form.phone_number} onChange={handleChange} error={fieldErrors.phone_number} />
+                  <SimpleField label="Profile picture URL" name="profile_picture_url" type="url" placeholder="https://example.com/photo.jpg" value={form.profile_picture_url} onChange={handleChange} error={fieldErrors.profile_picture_url} />
+                </details>
+              </>
+            )}
+            {actionError && <div className="action-error" role="alert">{actionError}</div>}
+            <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
+              {submitting ? (registration ? "Creating account…" : "Signing in…") : registration ? "Register" : "Log in"}
+            </button>
+          </form>
+          <div className="auth-divider" />
+          <button className="btn btn-secondary btn-block" onClick={() => goToScreen(registration ? "login" : "register")}>
+            {registration ? "Back to login" : "Create an account"}
+          </button>
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -105,13 +345,16 @@ function RequestErrorScreen() {
 }
 
 export default function App() {
+  const accessToken = getStoredAccessToken();
+
+  const handleLogout = () => {
+    localStorage.removeItem("foc_access_token");
+    localStorage.removeItem("foc_user");
+    window.location.href = window.location.pathname;
+  };
+
   // Current logged in user (NUS student)
-  const [user, setUser] = useState({
-    id: "usr-1",
-    name: "Student User",
-    email: "student1@u.nus.edu",
-    telegram: "@student1",
-  });
+  const [user, setUser] = useState(initialUser);
 
   // Main UI States
   const screen = new URLSearchParams(window.location.search).get("screen");
@@ -283,15 +526,19 @@ export default function App() {
     );
   };
 
+  if (!accessToken && !["login", "register"].includes(screen)) {
+    return <LandingPage />;
+  }
+
   if (screen === "login") return <AuthScreen registration={false} />;
   if (screen === "register") return <AuthScreen registration />;
   if (screen === "supplier-detail") {
-    return <><Navbar role={role} setRole={setRole} activeTab={activeTab} setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} /><SupplierDetailScreen supplier={routeSupplier} onChoose={() => handleQuickOpenModal(routeSupplier)} /><CreateOrderModal isOpen={isOrderModalOpen} onClose={() => setIsOrderModalOpen(false)} supplier={selectedSupplierForOrder} availableCredits={availableCredits} onSubmitOrder={handleCreateOrder} /></>;
+    return <><Navbar role={role} setRole={setRole} activeTab={activeTab} setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} onLogout={handleLogout} /><SupplierDetailScreen supplier={routeSupplier} onChoose={() => handleQuickOpenModal(routeSupplier)} /><CreateOrderModal isOpen={isOrderModalOpen} onClose={() => setIsOrderModalOpen(false)} supplier={selectedSupplierForOrder} availableCredits={availableCredits} onSubmitOrder={handleCreateOrder} /></>;
   }
   if (screen === "courier-detail") {
-    return <><Navbar role="COURIER" setRole={setRole} activeTab="courier-browse" setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} /><CourierDetailScreen order={routeOrder} onAccept={() => handleAcceptOrder(routeOrder.id)} /></>;
+    return <><Navbar role="COURIER" setRole={setRole} activeTab="courier-browse" setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} onLogout={handleLogout} /><CourierDetailScreen order={routeOrder} onAccept={() => handleAcceptOrder(routeOrder.id)} /></>;
   }
-  if (screen === "request-error") return <><Navbar role="REQUESTER" setRole={setRole} activeTab="my-requests" setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} /><RequestErrorScreen /></>;
+  if (screen === "request-error") return <><Navbar role="REQUESTER" setRole={setRole} activeTab="my-requests" setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} onLogout={handleLogout} /><RequestErrorScreen /></>;
 
   return (
     <div className="app-root">
@@ -303,6 +550,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         availableCredits={availableCredits}
         user={user}
+        onLogout={handleLogout}
       />
 
       {/* Main Sections */}

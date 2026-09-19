@@ -4,11 +4,13 @@ build/
 out/
 
 # Environment / secrets
-.env
-.env.local
-.env.*.local
+.env*
 *.pem
 *.key
+*.db
+__pycache__/
+.pytest_cache/
+.venv/
 
 # OS
 .DS_Store
