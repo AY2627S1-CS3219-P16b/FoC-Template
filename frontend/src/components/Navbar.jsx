@@ -5,7 +5,8 @@ export default function Navbar({
   setRole,
   activeTab,
   setActiveTab,
-  availableCredits
+  availableCredits,
+  onLogout,
 }) {
   return (
     <header className="header">
@@ -92,6 +93,9 @@ export default function Navbar({
             onClick={() => setActiveTab('credits')}
           >
             Credits: {availableCredits}
+          </button>
+          <button className="btn btn-primary logout-btn" onClick={onLogout}>
+            Log out
           </button>
         </div>
       </div>
