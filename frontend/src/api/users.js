@@ -52,3 +52,37 @@ export async function loginUser(credentials) {
 
   return body;
 }
+
+async function profileRequest(token, userId, method, changes) {
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(changes ? { "Content-Type": "application/json" } : {}),
+      },
+      ...(changes ? { body: JSON.stringify(changes) } : {}),
+    });
+  } catch {
+    throw new Error("The user service is unavailable. Please try again.");
+  }
+
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(body.detail || "Could not load your profile.");
+    error.fieldErrors = Object.fromEntries(
+      (body.errors || []).map(({ field, message }) => [field, message]),
+    );
+    throw error;
+  }
+  return body;
+}
+
+export function getUserProfile(token, userId) {
+  return profileRequest(token, userId, "GET");
+}
+
+export function updateUserProfile(token, userId, changes) {
+  return profileRequest(token, userId, "PATCH", changes);
+}

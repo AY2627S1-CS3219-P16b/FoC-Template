@@ -37,6 +37,20 @@ users = Table(
     Column("created_at", String, nullable=False),
 )
 
+profile_columns = (
+    users.c.id,
+    users.c.email,
+    users.c.display_name,
+    users.c.contact_preference,
+    users.c.telegram_handle,
+    users.c.phone_number,
+    users.c.profile_picture_url,
+    users.c.auth_role,
+    users.c.active_role_mode,
+    users.c.account_status,
+    users.c.created_at,
+)
+
 
 class Database:
     """Database access for the user service."""
@@ -59,19 +73,7 @@ class Database:
             with self.engine.begin() as connection:
                 connection.execute(users.insert().values(**user))
                 row = connection.execute(
-                    select(
-                        users.c.id,
-                        users.c.email,
-                        users.c.display_name,
-                        users.c.contact_preference,
-                        users.c.telegram_handle,
-                        users.c.phone_number,
-                        users.c.profile_picture_url,
-                        users.c.auth_role,
-                        users.c.active_role_mode,
-                        users.c.account_status,
-                        users.c.created_at,
-                    ).where(users.c.id == user["id"])
+                    select(*profile_columns).where(users.c.id == user["id"])
                 ).one()
         except IntegrityError as error:
             raise DuplicateEmailError from error
@@ -93,6 +95,27 @@ class Database:
             ).one_or_none()
 
         return dict(row._mapping) if row else None
+
+    def find_user_profile(self, user_id: str) -> dict[str, object] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(
+                select(*profile_columns).where(users.c.id == user_id)
+            ).one_or_none()
+        return dict(row._mapping) if row else None
+
+    def update_user_profile(
+        self, user_id: str, changes: dict[str, object]
+    ) -> dict[str, object] | None:
+        with self.engine.begin() as connection:
+            result = connection.execute(
+                update(users).where(users.c.id == user_id).values(**changes)
+            )
+            if result.rowcount == 0:
+                return None
+            row = connection.execute(
+                select(*profile_columns).where(users.c.id == user_id)
+            ).one()
+        return dict(row._mapping)
 
     def update_account_status(self, email: str, account_status: str) -> None:
         with self.engine.begin() as connection:

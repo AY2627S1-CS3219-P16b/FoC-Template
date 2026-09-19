@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Navbar from "./components/Navbar";
 import SuppliersSection from "./components/SuppliersSection";
 import CreateOrderModal from "./components/CreateOrderModal";
@@ -12,10 +12,25 @@ import {
   initialOrders,
   initialTransactions,
 } from "./data/mockData";
-import { loginUser, registerUser } from "./api/users";
+import {
+  getUserProfile,
+  loginUser,
+  registerUser,
+  updateUserProfile,
+} from "./api/users";
 
 function goToScreen(screen) {
   window.location.href = `?screen=${screen}`;
+}
+
+function tokenPayload(token) {
+  const encodedPayload = token.split(".")[1];
+  const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
+  const paddedBase64 = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "=",
+  );
+  return JSON.parse(atob(paddedBase64));
 }
 
 function getStoredAccessToken() {
@@ -23,13 +38,7 @@ function getStoredAccessToken() {
   if (!token) return null;
 
   try {
-    const encodedPayload = token.split(".")[1];
-    const base64 = encodedPayload.replace(/-/g, "+").replace(/_/g, "/");
-    const paddedBase64 = base64.padEnd(
-      base64.length + ((4 - (base64.length % 4)) % 4),
-      "=",
-    );
-    const payload = JSON.parse(atob(paddedBase64));
+    const payload = tokenPayload(token);
 
     if (!payload.exp || payload.exp * 1000 <= Date.now()) {
       localStorage.removeItem("foc_access_token");
@@ -94,6 +103,9 @@ function initialUser() {
         name: authenticatedUser.display_name,
         email: authenticatedUser.email,
         telegram: "",
+        contactPreference: null,
+        phoneNumber: null,
+        profilePictureUrl: null,
         authRole: authenticatedUser.auth_role,
         activeRoleMode: authenticatedUser.active_role_mode,
         accountStatus: authenticatedUser.account_status,
@@ -103,14 +115,31 @@ function initialUser() {
     localStorage.removeItem("foc_user");
   }
 
+  const token = getStoredAccessToken();
+  const userId = token ? tokenPayload(token).sub : "usr-1";
   return {
-    id: "usr-1",
+    id: userId,
     name: "Student User",
     email: "student1@u.nus.edu",
     telegram: "@student1",
     authRole: "USER",
     activeRoleMode: "REQUESTER",
     accountStatus: "ACTIVE",
+  };
+}
+
+function profileToUser(profile) {
+  return {
+    id: profile.id,
+    name: profile.display_name,
+    email: profile.email,
+    contactPreference: profile.contact_preference,
+    telegram: profile.telegram_handle,
+    phoneNumber: profile.phone_number,
+    profilePictureUrl: profile.profile_picture_url,
+    authRole: profile.auth_role,
+    activeRoleMode: profile.active_role_mode,
+    accountStatus: profile.account_status,
   };
 }
 
@@ -126,7 +155,10 @@ function SimpleField({
 }) {
   return (
     <div className="form-group">
-      <label htmlFor={name}>{label}{required ? " *" : ""}</label>
+      <label htmlFor={name}>
+        {label}
+        {required ? " *" : ""}
+      </label>
       <input
         id={name}
         name={name}
@@ -138,7 +170,11 @@ function SimpleField({
         aria-invalid={Boolean(error)}
         aria-describedby={error ? `${name}-error` : undefined}
       />
-      {error && <div id={`${name}-error`} className="field-error">{error}</div>}
+      {error && (
+        <div id={`${name}-error`} className="field-error">
+          {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -162,7 +198,11 @@ function SelectField({ label, name, value, onChange, options, error }) {
           </option>
         ))}
       </select>
-      {error && <div id={`${name}-error`} className="field-error">{error}</div>}
+      {error && (
+        <div id={`${name}-error`} className="field-error">
+          {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -231,7 +271,10 @@ function AuthScreen({ registration }) {
             <div className="success-message" role="status">
               Your NUS student account is ready.
             </div>
-            <button className="btn btn-primary btn-block" onClick={() => goToScreen("login")}>
+            <button
+              className="btn btn-primary btn-block"
+              onClick={() => goToScreen("login")}
+            >
               Continue to log in
             </button>
           </div>
@@ -246,14 +289,49 @@ function AuthScreen({ registration }) {
       <main className="landing-main auth-screen">
         <div className="auth-panel">
           <h1>{registration ? "Create Account" : "Log In"}</h1>
-          <p className="auth-help">{registration ? "Create an account with your NUS email." : "Sign in to Friend on Campus."}</p>
+          <p className="auth-help">
+            {registration
+              ? "Create an account with your NUS email."
+              : "Sign in to Friend on Campus."}
+          </p>
           <form onSubmit={handleSubmit} noValidate>
-            <SimpleField label="NUS email" name="email" type="email" placeholder="e0123456@u.nus.edu" required value={form.email} onChange={handleChange} error={fieldErrors.email} />
-            {registration && <SimpleField label="Display name" name="display_name" placeholder="Your name" required value={form.display_name} onChange={handleChange} error={fieldErrors.display_name} />}
-            <SimpleField label="Password" name="password" type="password" placeholder="Password" required value={form.password} onChange={handleChange} error={fieldErrors.password} />
+            <SimpleField
+              label="NUS email"
+              name="email"
+              type="email"
+              placeholder="e0123456@u.nus.edu"
+              required
+              value={form.email}
+              onChange={handleChange}
+              error={fieldErrors.email}
+            />
+            {registration && (
+              <SimpleField
+                label="Display name"
+                name="display_name"
+                placeholder="Your name"
+                required
+                value={form.display_name}
+                onChange={handleChange}
+                error={fieldErrors.display_name}
+              />
+            )}
+            <SimpleField
+              label="Password"
+              name="password"
+              type="password"
+              placeholder="Password"
+              required
+              value={form.password}
+              onChange={handleChange}
+              error={fieldErrors.password}
+            />
             {registration && (
               <>
-                <p className="password-help">Use at least 10 characters with uppercase, lowercase, a number, and a symbol.</p>
+                <p className="password-help">
+                  Use at least 10 characters with uppercase, lowercase, a
+                  number, and a symbol.
+                </p>
                 <details className="optional-fields">
                   <summary>Optional profile details</summary>
                   <SelectField
@@ -268,19 +346,59 @@ function AuthScreen({ registration }) {
                       { value: "PHONE", label: "Phone" },
                     ]}
                   />
-                  <SimpleField label="Telegram handle" name="telegram_handle" placeholder="@username" value={form.telegram_handle} onChange={handleChange} error={fieldErrors.telegram_handle} />
-                  <SimpleField label="Phone number" name="phone_number" type="tel" placeholder="Phone number" value={form.phone_number} onChange={handleChange} error={fieldErrors.phone_number} />
-                  <SimpleField label="Profile picture URL" name="profile_picture_url" type="url" placeholder="https://example.com/photo.jpg" value={form.profile_picture_url} onChange={handleChange} error={fieldErrors.profile_picture_url} />
+                  <SimpleField
+                    label="Telegram handle"
+                    name="telegram_handle"
+                    placeholder="@username"
+                    value={form.telegram_handle}
+                    onChange={handleChange}
+                    error={fieldErrors.telegram_handle}
+                  />
+                  <SimpleField
+                    label="Phone number"
+                    name="phone_number"
+                    type="tel"
+                    placeholder="Phone number"
+                    value={form.phone_number}
+                    onChange={handleChange}
+                    error={fieldErrors.phone_number}
+                  />
+                  <SimpleField
+                    label="Profile picture URL"
+                    name="profile_picture_url"
+                    type="url"
+                    placeholder="https://example.com/photo.jpg"
+                    value={form.profile_picture_url}
+                    onChange={handleChange}
+                    error={fieldErrors.profile_picture_url}
+                  />
                 </details>
               </>
             )}
-            {actionError && <div className="action-error" role="alert">{actionError}</div>}
-            <button type="submit" className="btn btn-primary btn-block" disabled={submitting}>
-              {submitting ? (registration ? "Creating account…" : "Signing in…") : registration ? "Register" : "Log in"}
+            {actionError && (
+              <div className="action-error" role="alert">
+                {actionError}
+              </div>
+            )}
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={submitting}
+            >
+              {submitting
+                ? registration
+                  ? "Creating account…"
+                  : "Signing in…"
+                : registration
+                  ? "Register"
+                  : "Log in"}
             </button>
           </form>
           <div className="auth-divider" />
-          <button className="btn btn-secondary btn-block" onClick={() => goToScreen(registration ? "login" : "register")}>
+          <button
+            className="btn btn-secondary btn-block"
+            onClick={() => goToScreen(registration ? "login" : "register")}
+          >
             {registration ? "Back to login" : "Create an account"}
           </button>
         </div>
@@ -292,16 +410,33 @@ function AuthScreen({ registration }) {
 function SupplierDetailScreen({ supplier, onChoose }) {
   return (
     <main className="main-content">
-      <div className="section-header"><h2>Supplier Details</h2></div>
+      <div className="section-header">
+        <h2>Supplier Details</h2>
+      </div>
       <div className="card detail-card">
         <h3>{supplier.name}</h3>
-        <p><strong>Campus location:</strong> {supplier.location}</p>
-        <p><strong>Description:</strong> {supplier.description}</p>
-        <p><strong>Pickup instructions:</strong> {supplier.pickupNotes}</p>
-        <p><strong>Operating hours:</strong> {supplier.operatingHours}</p>
+        <p>
+          <strong>Campus location:</strong> {supplier.location}
+        </p>
+        <p>
+          <strong>Description:</strong> {supplier.description}
+        </p>
+        <p>
+          <strong>Pickup instructions:</strong> {supplier.pickupNotes}
+        </p>
+        <p>
+          <strong>Operating hours:</strong> {supplier.operatingHours}
+        </p>
         <div className="detail-actions">
-          <button className="btn btn-secondary" onClick={() => goToScreen("suppliers")}>Back</button>
-          <button className="btn btn-primary" onClick={onChoose}>Choose supplier</button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => goToScreen("suppliers")}
+          >
+            Back
+          </button>
+          <button className="btn btn-primary" onClick={onChoose}>
+            Choose supplier
+          </button>
         </div>
       </div>
     </main>
@@ -311,19 +446,44 @@ function SupplierDetailScreen({ supplier, onChoose }) {
 function CourierDetailScreen({ order, onAccept }) {
   return (
     <main className="main-content">
-      <div className="section-header"><h2>Courier Order Details</h2></div>
+      <div className="section-header">
+        <h2>Courier Order Details</h2>
+      </div>
       <div className="card detail-card">
-        <h3>{order.id} - {order.supplierName}</h3>
-        <p><strong>Pickup:</strong> {order.pickupLocation}</p>
-        <p><strong>Item:</strong> {order.items}</p>
-        <p><strong>Delivery:</strong> {order.deliveryLocation}</p>
-        <p><strong>Instructions:</strong> {order.instructions}</p>
-        <p><strong>Expiry:</strong> {order.deadline}</p>
-        <p><strong>Requester:</strong> {order.requesterName}</p>
-        <div className="action-error">Example status: this order may already be assigned.</div>
+        <h3>
+          {order.id} - {order.supplierName}
+        </h3>
+        <p>
+          <strong>Pickup:</strong> {order.pickupLocation}
+        </p>
+        <p>
+          <strong>Item:</strong> {order.items}
+        </p>
+        <p>
+          <strong>Delivery:</strong> {order.deliveryLocation}
+        </p>
+        <p>
+          <strong>Instructions:</strong> {order.instructions}
+        </p>
+        <p>
+          <strong>Expiry:</strong> {order.deadline}
+        </p>
+        <p>
+          <strong>Requester:</strong> {order.requesterName}
+        </p>
+        <div className="action-error">
+          Example status: this order may already be assigned.
+        </div>
         <div className="detail-actions">
-          <button className="btn btn-secondary" onClick={() => goToScreen("courier-orders")}>Back</button>
-          <button className="btn btn-primary" onClick={onAccept}>Accept order</button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => goToScreen("courier-orders")}
+          >
+            Back
+          </button>
+          <button className="btn btn-primary" onClick={onAccept}>
+            Accept order
+          </button>
         </div>
       </div>
     </main>
@@ -333,12 +493,24 @@ function CourierDetailScreen({ order, onAccept }) {
 function RequestErrorScreen() {
   return (
     <main className="main-content">
-      <div className="section-header"><h2>Request Error / Pending State</h2></div>
+      <div className="section-header">
+        <h2>Request Error / Pending State</h2>
+      </div>
       <div className="card">
-        <div className="form-group"><label>Delivery location *</label><input placeholder="Required field" /></div>
+        <div className="form-group">
+          <label>Delivery location *</label>
+          <input placeholder="Required field" />
+        </div>
         <div className="field-error">Delivery location is required.</div>
-        <div className="action-error">Credit reservation is pending. The request has not been opened yet.</div>
-        <button className="btn btn-secondary" onClick={() => goToScreen("create-request")}>Back to request</button>
+        <div className="action-error">
+          Credit reservation is pending. The request has not been opened yet.
+        </div>
+        <button
+          className="btn btn-secondary"
+          onClick={() => goToScreen("create-request")}
+        >
+          Back to request
+        </button>
       </div>
     </main>
   );
@@ -355,22 +527,50 @@ export default function App() {
 
   // Current logged in user (NUS student)
   const [user, setUser] = useState(initialUser);
+  const [profileError, setProfileError] = useState("");
+
+  useEffect(() => {
+    if (!accessToken) return;
+    getUserProfile(accessToken, user.id)
+      .then((profile) => {
+        setUser(profileToUser(profile));
+        localStorage.setItem(
+          "foc_user",
+          JSON.stringify({
+            id: profile.id,
+            display_name: profile.display_name,
+            email: profile.email,
+            auth_role: profile.auth_role,
+            active_role_mode: profile.active_role_mode,
+            account_status: profile.account_status,
+          }),
+        );
+      })
+      .catch((error) => setProfileError(error.message));
+  }, [accessToken, user.id]);
+
+  const handleProfileUpdate = async (changes) => {
+    const profile = await updateUserProfile(accessToken, user.id, changes);
+    setUser(profileToUser(profile));
+    setProfileError("");
+  };
 
   // Main UI States
   const screen = new URLSearchParams(window.location.search).get("screen");
-  const initialTab = {
-    suppliers: "suppliers",
-    requester: "suppliers",
-    requests: "my-requests",
-    "requester-orders": "my-requests",
-    courier: "courier-browse",
-    openOrders: "courier-browse",
-    "courier-orders": "courier-browse",
-    "open-orders": "courier-browse",
-    assignment: "courier-active",
-    credits: "credits",
-    profile: "profile",
-  }[screen] || "suppliers";
+  const initialTab =
+    {
+      suppliers: "suppliers",
+      requester: "suppliers",
+      requests: "my-requests",
+      "requester-orders": "my-requests",
+      courier: "courier-browse",
+      openOrders: "courier-browse",
+      "courier-orders": "courier-browse",
+      "open-orders": "courier-browse",
+      assignment: "courier-active",
+      credits: "credits",
+      profile: "profile",
+    }[screen] || "suppliers";
   const initialRole = [
     "courier",
     "openOrders",
@@ -394,11 +594,14 @@ export default function App() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(
     screen === "create-request",
   );
-  const [selectedSupplierForOrder, setSelectedSupplierForOrder] =
-    useState(screen === "create-request" ? initialSuppliers[0] : null);
+  const [selectedSupplierForOrder, setSelectedSupplierForOrder] = useState(
+    screen === "create-request" ? initialSuppliers[0] : null,
+  );
 
-  const routeSupplier = suppliers.find((supplier) => supplier.id === "sup-1") || suppliers[0];
-  const routeOrder = orders.find((order) => order.id === "REQ-102") || orders[0];
+  const routeSupplier =
+    suppliers.find((supplier) => supplier.id === "sup-1") || suppliers[0];
+  const routeOrder =
+    orders.find((order) => order.id === "REQ-102") || orders[0];
 
   // Active courier task for the current user
   const activeCourierTask = orders.find(
@@ -533,12 +736,65 @@ export default function App() {
   if (screen === "login") return <AuthScreen registration={false} />;
   if (screen === "register") return <AuthScreen registration />;
   if (screen === "supplier-detail") {
-    return <><Navbar role={role} setRole={setRole} activeTab={activeTab} setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} onLogout={handleLogout} /><SupplierDetailScreen supplier={routeSupplier} onChoose={() => handleQuickOpenModal(routeSupplier)} /><CreateOrderModal isOpen={isOrderModalOpen} onClose={() => setIsOrderModalOpen(false)} supplier={selectedSupplierForOrder} availableCredits={availableCredits} onSubmitOrder={handleCreateOrder} /></>;
+    return (
+      <>
+        <Navbar
+          role={role}
+          setRole={setRole}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          availableCredits={availableCredits}
+          user={user}
+          onLogout={handleLogout}
+        />
+        <SupplierDetailScreen
+          supplier={routeSupplier}
+          onChoose={() => handleQuickOpenModal(routeSupplier)}
+        />
+        <CreateOrderModal
+          isOpen={isOrderModalOpen}
+          onClose={() => setIsOrderModalOpen(false)}
+          supplier={selectedSupplierForOrder}
+          availableCredits={availableCredits}
+          onSubmitOrder={handleCreateOrder}
+        />
+      </>
+    );
   }
   if (screen === "courier-detail") {
-    return <><Navbar role="COURIER" setRole={setRole} activeTab="courier-browse" setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} onLogout={handleLogout} /><CourierDetailScreen order={routeOrder} onAccept={() => handleAcceptOrder(routeOrder.id)} /></>;
+    return (
+      <>
+        <Navbar
+          role="COURIER"
+          setRole={setRole}
+          activeTab="courier-browse"
+          setActiveTab={setActiveTab}
+          availableCredits={availableCredits}
+          user={user}
+          onLogout={handleLogout}
+        />
+        <CourierDetailScreen
+          order={routeOrder}
+          onAccept={() => handleAcceptOrder(routeOrder.id)}
+        />
+      </>
+    );
   }
-  if (screen === "request-error") return <><Navbar role="REQUESTER" setRole={setRole} activeTab="my-requests" setActiveTab={setActiveTab} availableCredits={availableCredits} user={user} onLogout={handleLogout} /><RequestErrorScreen /></>;
+  if (screen === "request-error")
+    return (
+      <>
+        <Navbar
+          role="REQUESTER"
+          setRole={setRole}
+          activeTab="my-requests"
+          setActiveTab={setActiveTab}
+          availableCredits={availableCredits}
+          user={user}
+          onLogout={handleLogout}
+        />
+        <RequestErrorScreen />
+      </>
+    );
 
   return (
     <div className="app-root">
@@ -603,7 +859,8 @@ export default function App() {
         {activeTab === "profile" && (
           <ProfileSection
             user={user}
-            onUpdateUser={setUser}
+            onUpdateUser={handleProfileUpdate}
+            loadError={profileError}
             role={role}
             setRole={setRole}
             availableCredits={availableCredits}
