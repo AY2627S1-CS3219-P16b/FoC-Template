@@ -1,3 +1,5 @@
+import { sendAuthenticatedRequest } from "./client";
+
 const API_BASE_URL = import.meta.env.VITE_USER_API_URL || "";
 
 export async function registerUser(registration) {
@@ -53,36 +55,28 @@ export async function loginUser(credentials) {
   return body;
 }
 
-async function profileRequest(token, userId, method, changes) {
-  let response;
-  try {
-    response = await fetch(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(changes ? { "Content-Type": "application/json" } : {}),
-      },
-      ...(changes ? { body: JSON.stringify(changes) } : {}),
-    });
-  } catch {
-    throw new Error("The user service is unavailable. Please try again.");
-  }
-
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const error = new Error(body.detail || "Could not load your profile.");
-    error.fieldErrors = Object.fromEntries(
-      (body.errors || []).map(({ field, message }) => [field, message]),
-    );
-    throw error;
-  }
-  return body;
-}
-
 export function getUserProfile(token, userId) {
-  return profileRequest(token, userId, "GET");
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
+    token,
+    method: "GET",
+    errorMessage: "Could not load your profile.",
+  });
 }
 
 export function updateUserProfile(token, userId, changes) {
-  return profileRequest(token, userId, "PATCH", changes);
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
+    token,
+    method: "PATCH",
+    data: changes,
+    errorMessage: "Could not save your profile.",
+  });
+}
+
+export function updateUserRoleMode(token, userId, roleMode) {
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}/role-mode`, {
+    token,
+    method: "PATCH",
+    data: { active_role_mode: roleMode },
+    errorMessage: "Could not change your role mode.",
+  });
 }

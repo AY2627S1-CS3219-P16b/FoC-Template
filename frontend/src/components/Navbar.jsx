@@ -3,6 +3,8 @@ import React from 'react';
 export default function Navbar({
   role,
   setRole,
+  roleError,
+  switchingRole,
   activeTab,
   setActiveTab,
   availableCredits,
@@ -22,23 +24,20 @@ export default function Navbar({
           <div className="role-switcher">
             <button
               className={`role-btn ${role === 'REQUESTER' ? 'active' : ''}`}
-              onClick={() => {
-                setRole('REQUESTER');
-                setActiveTab('suppliers');
-              }}
+              onClick={() => setRole('REQUESTER')}
+              disabled={switchingRole}
             >
               Requester Mode
             </button>
             <button
               className={`role-btn ${role === 'COURIER' ? 'active' : ''}`}
-              onClick={() => {
-                setRole('COURIER');
-                setActiveTab('courier-browse');
-              }}
+              onClick={() => setRole('COURIER')}
+              disabled={switchingRole}
             >
               Courier Mode
             </button>
           </div>
+          {roleError && <div className="action-error" role="alert">{roleError}</div>}
 
           <nav className="nav-tabs">
             {role === 'REQUESTER' ? (

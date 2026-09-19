@@ -6,6 +6,7 @@ export default function ProfileSection({
   loadError,
   role,
   setRole,
+  switchingRole,
   availableCredits,
 }) {
   const [form, setForm] = useState({
@@ -117,12 +118,14 @@ export default function ProfileSection({
               <button
                 className={`btn ${role === "REQUESTER" ? "btn-primary" : "btn-secondary"} btn-sm`}
                 onClick={() => setRole("REQUESTER")}
+                disabled={switchingRole}
               >
                 Requester
               </button>
               <button
                 className={`btn ${role === "COURIER" ? "btn-primary" : "btn-secondary"} btn-sm`}
                 onClick={() => setRole("COURIER")}
+                disabled={switchingRole}
               >
                 Courier
               </button>
