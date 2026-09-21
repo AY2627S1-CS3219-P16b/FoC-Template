@@ -35,6 +35,7 @@ function auditValue(value) {
 
 export default function AdminSection({ token, currentUserId }) {
   const [accounts, setAccounts] = useState([]);
+  const [endpointResults, setEndpointResults] = useState({ accounts: null, audit: null });
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditError, setAuditError] = useState("");
   const [auditLoading, setAuditLoading] = useState(true);
@@ -66,11 +67,16 @@ export default function AdminSection({ token, currentUserId }) {
     listUsers(token)
       .then((users) => {
         if (!active) return;
+        setEndpointResults((current) => ({ ...current, accounts: 200 }));
         setAccounts(users);
         setSelectedId(users.find((user) => user.id !== currentUserId)?.id || users[0]?.id || null);
       })
       .catch((loadError) => {
-        if (active) setError(loadError.message);
+        if (!active) return;
+        setEndpointResults((current) => ({ ...current, accounts: loadError.status || "error" }));
+        setAccounts([]);
+        setSelectedId(null);
+        if (loadError.status !== 403) setError(loadError.message);
       });
     return () => { active = false; };
   }, [token, currentUserId]);
@@ -82,11 +88,13 @@ export default function AdminSection({ token, currentUserId }) {
     listAdminAuditLogs(token, auditPage, AUDIT_PAGE_SIZE)
       .then((result) => {
         if (!active) return;
+        setEndpointResults((current) => ({ ...current, audit: 200 }));
         setAuditLogs(result.items);
         setAuditTotal(result.total);
       })
       .catch((loadError) => {
         if (!active) return;
+        setEndpointResults((current) => ({ ...current, audit: loadError.status || "error" }));
         setAuditLogs([]);
         setAuditTotal(0);
         setAuditError(loadError.message);
@@ -162,6 +170,23 @@ export default function AdminSection({ token, currentUserId }) {
       {fieldErrors[name] && <div className="field-error">{fieldErrors[name]}</div>}
     </div>
   );
+
+  if (endpointResults.accounts === 403 || endpointResults.audit === 403) {
+    const resultLabel = (status) => status === null ? "Checking…" : status === 403 ? "403 Forbidden" : String(status);
+    return (
+      <section>
+        <div className="section-header"><h2>Admin access</h2></div>
+        <div className="card">
+          <p role="alert">Access denied. This account does not currently have admin permission.</p>
+          <p>The User Service checked the account’s current role when these requests arrived:</p>
+          <ul>
+            <li><code>GET /api/v1/users</code> → {resultLabel(endpointResults.accounts)}</li>
+            <li><code>GET /api/v1/admin/audit-logs</code> → {resultLabel(endpointResults.audit)}</li>
+          </ul>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section>

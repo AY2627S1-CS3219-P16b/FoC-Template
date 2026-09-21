@@ -19,6 +19,7 @@ export async function sendAuthenticatedRequest(url, { token, method, data, error
   const responseBody = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(responseBody.detail || errorMessage);
+    error.status = response.status;
     error.fieldErrors = Object.fromEntries(
       (responseBody.errors || []).map(({ field, message }) => [field, message]),
     );

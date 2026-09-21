@@ -918,7 +918,7 @@ export default function App() {
             availableCredits={availableCredits}
           />
         )}
-        {activeTab === "admin" && user.authRole === "ADMIN" && (
+        {activeTab === "admin" && (
           <AdminSection token={accessToken} currentUserId={user.id} />
         )}
       </main>

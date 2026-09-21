@@ -86,14 +86,12 @@ export default function Navbar({
             >
               Profile
             </button>
-            {user?.authRole === 'ADMIN' && (
-              <button
-                className={`nav-tab ${activeTab === 'admin' ? 'active' : ''}`}
-                onClick={() => setActiveTab('admin')}
-              >
-                Admin
-              </button>
-            )}
+            <a
+              className={`nav-tab ${activeTab === 'admin' ? 'active' : ''}`}
+              href="?screen=admin"
+            >
+              Admin access
+            </a>
           </nav>
 
           <button
