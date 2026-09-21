@@ -152,3 +152,49 @@ class RoleModeUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     active_role_mode: Literal["REQUESTER", "COURIER"]
+
+
+class AdminChangeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str
+
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("must not be empty")
+        if len(value) > 500:
+            raise ValueError("must not exceed 500 characters")
+        return value
+
+
+class AuthRoleUpdateRequest(AdminChangeRequest):
+    auth_role: Literal["USER", "ADMIN"]
+
+
+class AccountStatusUpdateRequest(AdminChangeRequest):
+    account_status: Literal["ACTIVE", "SUSPENDED", "DISABLED"]
+
+
+class AdminAuditResponse(BaseModel):
+    id: str
+    acting_admin_user_id: str
+    acting_admin_display_name: str
+    acting_admin_email: str
+    target_user_id: str
+    target_display_name: str
+    target_email: str
+    action_type: Literal["PROFILE_UPDATED", "AUTH_ROLE_CHANGED", "ACCOUNT_STATUS_CHANGED"]
+    previous_value: dict[str, str | None]
+    new_value: dict[str, str | None]
+    reason: str
+    timestamp: datetime
+
+
+class AdminAuditPageResponse(BaseModel):
+    items: list[AdminAuditResponse]
+    total: int
+    page: int
+    page_size: int

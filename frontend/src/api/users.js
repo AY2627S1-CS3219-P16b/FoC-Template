@@ -80,3 +80,48 @@ export function updateUserRoleMode(token, userId, roleMode) {
     errorMessage: "Could not change your role mode.",
   });
 }
+
+export function listUsers(token) {
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users`, {
+    token,
+    method: "GET",
+    errorMessage: "Could not load user accounts.",
+  });
+}
+
+export function listAdminAuditLogs(token, page = 1, pageSize = 10) {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/admin/audit-logs?${params}`, {
+    token,
+    method: "GET",
+    errorMessage: "Could not load audit history.",
+  });
+}
+
+export function adminUpdateProfile(token, userId, changes, reason) {
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}`, {
+    token,
+    method: "PATCH",
+    data: changes,
+    headers: { "X-Admin-Reason": reason },
+    errorMessage: "Could not update the account profile.",
+  });
+}
+
+export function adminUpdateAuthRole(token, userId, authRole, reason) {
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}/auth-role`, {
+    token,
+    method: "PATCH",
+    data: { auth_role: authRole, reason },
+    errorMessage: "Could not change the authorization role.",
+  });
+}
+
+export function adminUpdateStatus(token, userId, accountStatus, reason) {
+  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}/status`, {
+    token,
+    method: "PATCH",
+    data: { account_status: accountStatus, reason },
+    errorMessage: "Could not change the account status.",
+  });
+}
