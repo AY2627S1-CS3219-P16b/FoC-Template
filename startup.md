@@ -97,7 +97,8 @@ Loaded 21 CSV rows; inserted 21; suppliers in database: 21
 ```
 
 Run the import for a fresh database; it is not needed on every startup.
-It creates the table if missing and skips previously imported records.
+It creates the tables if missing, seeds the authored place catalogue, and
+imports suppliers linked to those places. Existing records are skipped.
 
 Start the service in the same terminal:
 
@@ -108,6 +109,9 @@ python -m uvicorn app.main:create_app --factory --reload --port 8001
 Wait for `Application startup complete` and leave it running. Startup checks
 the PostgreSQL connection. API documentation: <http://localhost:8001/docs>;
 no supplier endpoints have been added yet.
+
+See the [Supplier Service README](supplier-service/README.md) for schema and
+design decisions, seed-data conventions, database maintenance, and tests.
 
 ### Terminal 3: Frontend
 
@@ -155,25 +159,6 @@ SQLite takes a write lock before checking bootstrap state. The bootstrap
 table's unique key resolves concurrent inserts on PostgreSQL. Only one account
 is promoted; a concurrent repeat for the same account becomes a no-op.
 Subsequent promotions use the authenticated admin API.
-
-## Supplier database notes
-
-`app/schema.py` in Supplier Service defines the `suppliers` table. It stores the
-CSV's name, type, building, floor, location description, coordinates, opening
-and closing times, and image URL. It adds a UUID, optional pickup instructions,
-active status, and creation/update timestamps. Overnight
-opening hours are allowed. Original CSV type labels, location spellings, and
-image URLs are preserved.
-
-PostgreSQL data persists in the Docker volume `supplier-db-data` across service
-and container restarts. `create_all()` creates missing tables only; changes to
-an existing table's structure require a database migration.
-
-To inspect records from the repository root:
-
-```bash
-docker compose exec supplier-db psql -U supplier -d supplier_db -c 'SELECT name, supplier_type, building, is_active FROM suppliers ORDER BY name;'
-```
 
 ## Stopping locally
 
