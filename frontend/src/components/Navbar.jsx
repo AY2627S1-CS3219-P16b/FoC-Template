@@ -8,6 +8,7 @@ export default function Navbar({
   activeTab,
   setActiveTab,
   availableCredits,
+  user,
   onLogout,
 }) {
   return (
@@ -85,6 +86,12 @@ export default function Navbar({
             >
               Profile
             </button>
+            <a
+              className={`nav-tab ${activeTab === 'admin' ? 'active' : ''}`}
+              href="?screen=admin"
+            >
+              Admin access
+            </a>
           </nav>
 
           <button

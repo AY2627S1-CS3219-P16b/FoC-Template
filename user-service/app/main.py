@@ -5,14 +5,23 @@ from uuid import uuid4
 
 import jwt
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
-from fastapi import Body, FastAPI, HTTPException, Request, status
+from fastapi import Body, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .database import Database, DuplicateEmailError
+from .database import (
+    AdminPermissionError,
+    LastActiveAdminError,
+    NoChangeError,
+    UserNotFoundError,
+)
 from .api_schemas import (
+    AccountStatusUpdateRequest,
+    AdminAuditPageResponse,
+    AuthRoleUpdateRequest,
     LoginRequest,
     LoginResponse,
     ProfileUpdateRequest,
@@ -230,13 +239,24 @@ def create_app(
             raise HTTPException(status_code=401, detail="Invalid authentication token.")
         return user
 
+    @app.get("/api/v1/users", response_model=list[UserResponse])
+    def list_users(request: Request):
+        actor = authenticated_user(request)
+        if actor["auth_role"] != "ADMIN":
+            raise HTTPException(status_code=403, detail="Admin access is required.")
+        return database.list_user_profiles()
+
     @app.get("/api/v1/users/{user_id}", response_model=UserResponse)
     def get_user_profile(user_id: str, request: Request):
         actor = authenticated_user(request)
         if user_id == actor["id"]:
             target = actor
         else:
-            raise HTTPException(status_code=403, detail="Cannot access another user's profile.")
+            if actor["auth_role"] != "ADMIN":
+                raise HTTPException(status_code=403, detail="Cannot access another user's profile.")
+            target = database.find_user_profile(user_id)
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found.")
         return target
 
     @app.patch("/api/v1/users/{user_id}", response_model=UserResponse)
@@ -245,14 +265,27 @@ def create_app(
         if user_id == actor["id"]:
             target = actor
         else:
-            raise HTTPException(status_code=403, detail="Cannot access another user's profile.")
+            if actor["auth_role"] != "ADMIN":
+                raise HTTPException(status_code=403, detail="Cannot access another user's profile.")
+            target = database.find_user_profile(user_id)
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found.")
         try:
             update_request = ProfileUpdateRequest.model_validate(body)
         except ValidationError as error:
             raise RequestValidationError(error.errors()) from error
-        return database.update_user_profile(
-            target["id"], update_request.model_dump(exclude_unset=True)
-        )
+        changes = update_request.model_dump(exclude_unset=True)
+        if user_id == actor["id"]:
+            return database.update_user_profile(target["id"], changes)
+        reason = request.headers.get("X-Admin-Reason", "").strip()
+        if not reason or len(reason) > 500:
+            raise HTTPException(status_code=422, detail="X-Admin-Reason must contain 1 to 500 characters.")
+        try:
+            return database.admin_update_profile(actor["id"], target["id"], changes, reason)
+        except AdminPermissionError as error:
+            raise HTTPException(status_code=403, detail="Admin access is required.") from error
+        except UserNotFoundError as error:
+            raise HTTPException(status_code=404, detail="User not found.") from error
 
     @app.patch(
         "/api/v1/users/{user_id}/role-mode",
@@ -278,5 +311,79 @@ def create_app(
         if not updated:
             raise HTTPException(status_code=401, detail="Invalid authentication token.")
         return updated
+
+    @app.patch(
+        "/api/v1/users/{user_id}/auth-role",
+        response_model=UserResponse,
+        openapi_extra={
+            "requestBody": {
+                "content": {"application/json": {"schema": AuthRoleUpdateRequest.model_json_schema()}},
+                "required": True,
+            }
+        },
+    )
+    def update_auth_role(user_id: str, request: Request, body: dict[str, object] = Body(...)):
+        actor = authenticated_user(request)
+        if actor["auth_role"] != "ADMIN" or user_id == actor["id"]:
+            raise HTTPException(status_code=403, detail="An admin must change another account.")
+        try:
+            update_request = AuthRoleUpdateRequest.model_validate(body)
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from error
+        try:
+            return database.change_auth_role(
+                actor["id"], user_id, update_request.auth_role, update_request.reason
+            )
+        except AdminPermissionError as error:
+            raise HTTPException(status_code=403, detail="Admin access is required.") from error
+        except UserNotFoundError as error:
+            raise HTTPException(status_code=404, detail="User not found.") from error
+        except LastActiveAdminError as error:
+            raise HTTPException(status_code=409, detail="At least one active admin must remain.") from error
+        except NoChangeError as error:
+            raise HTTPException(status_code=409, detail="Authorization role is unchanged.") from error
+
+    @app.patch(
+        "/api/v1/users/{user_id}/status",
+        response_model=UserResponse,
+        openapi_extra={
+            "requestBody": {
+                "content": {"application/json": {"schema": AccountStatusUpdateRequest.model_json_schema()}},
+                "required": True,
+            }
+        },
+    )
+    def update_status(user_id: str, request: Request, body: dict[str, object] = Body(...)):
+        actor = authenticated_user(request)
+        if actor["auth_role"] != "ADMIN" or user_id == actor["id"]:
+            raise HTTPException(status_code=403, detail="An admin must change another account.")
+        try:
+            update_request = AccountStatusUpdateRequest.model_validate(body)
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from error
+        try:
+            return database.change_account_status(
+                actor["id"], user_id,
+                update_request.account_status, update_request.reason,
+            )
+        except AdminPermissionError as error:
+            raise HTTPException(status_code=403, detail="Admin access is required.") from error
+        except UserNotFoundError as error:
+            raise HTTPException(status_code=404, detail="User not found.") from error
+        except LastActiveAdminError as error:
+            raise HTTPException(status_code=409, detail="At least one active admin must remain.") from error
+        except NoChangeError as error:
+            raise HTTPException(status_code=409, detail="Account status is unchanged.") from error
+
+    @app.get("/api/v1/admin/audit-logs", response_model=AdminAuditPageResponse)
+    def list_audit_logs(
+        request: Request,
+        page: int = Query(default=1, ge=1),
+        page_size: int = Query(default=10, ge=1, le=100),
+    ):
+        actor = authenticated_user(request)
+        if actor["auth_role"] != "ADMIN":
+            raise HTTPException(status_code=403, detail="Admin access is required.")
+        return database.admin_audit_page(page, page_size)
 
     return app
