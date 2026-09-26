@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatPlace } from '../api/suppliers';
 
 export default function CreateOrderModal({
   isOpen,
@@ -14,6 +15,12 @@ export default function CreateOrderModal({
   const [errorMsg, setErrorMsg] = useState('');
 
   if (!isOpen || !supplier) return null;
+
+  // Live suppliers carry a nested place; mock order data used a flat string.
+  const pickupLocation = supplier.place
+    ? `${formatPlace(supplier.place)}${supplier.floor ? `, level ${supplier.floor}` : ''}`
+    : supplier.location;
+  const pickupNotes = supplier.pickup_instructions ?? supplier.pickupNotes;
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -31,7 +38,7 @@ export default function CreateOrderModal({
     onSubmitOrder({
       supplierId: supplier.id,
       supplierName: supplier.name,
-      pickupLocation: supplier.location,
+      pickupLocation,
       items: items.trim(),
       deliveryLocation: deliveryLocation.trim(),
       instructions: instructions.trim() || 'None',
@@ -62,7 +69,13 @@ export default function CreateOrderModal({
         <form onSubmit={handleSubmit}>
           <div className="card" style={{ background: '#F8F8F8', marginBottom: '10px' }}>
             <div><strong>Supplier:</strong> {supplier.name}</div>
-            <div><strong>Pickup Location:</strong> {supplier.location}</div>
+            <div><strong>Pickup Location:</strong> {pickupLocation}</div>
+            {supplier.location_description ? (
+              <div><strong>Pickup Directions:</strong> {supplier.location_description}</div>
+            ) : null}
+            {pickupNotes ? (
+              <div><strong>Pickup Notes:</strong> {pickupNotes}</div>
+            ) : null}
           </div>
 
           <div className="form-group">
