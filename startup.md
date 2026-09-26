@@ -78,6 +78,7 @@ Create `supplier-service/.env.dev` with:
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://supplier:supplier_local_dev@localhost:5433/supplier_db
+USER_SERVICE_URL=http://127.0.0.1:8000
 ```
 
 These local development credentials match `compose.yaml`. The environment
@@ -108,7 +109,9 @@ python -m uvicorn app.main:create_app --factory --reload --port 8001
 
 Wait for `Application startup complete` and leave it running. Startup checks
 the PostgreSQL connection. API documentation: <http://localhost:8001/docs>;
-no supplier endpoints have been added yet.
+supplier read endpoints require a User Service login token. Keep User Service
+running for token verification. In Swagger, use Authorize with the access token
+returned by login.
 
 See the [Supplier Service README](supplier-service/README.md) for schema and
 design decisions, seed-data conventions, database maintenance, and tests.
