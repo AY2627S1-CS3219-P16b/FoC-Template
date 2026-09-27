@@ -7,12 +7,11 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
-SECRET = "test-signing-secret"
 PASSWORD = "StrongPass1!"
 
 
 def make_client(tmp_path):
-    app = create_app(f"sqlite:///{tmp_path / 'users.db'}", jwt_secret=SECRET)
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     return TestClient(app), app
 
 
@@ -35,7 +34,9 @@ def role_url(user):
     return f"/api/v1/users/{user['id']}/role-mode"
 
 
-def test_active_user_can_switch_modes_and_login_returns_current_mode(tmp_path):
+def test_active_user_can_switch_modes_and_login_returns_current_mode(
+    tmp_path, jwt_public_key
+):
     client, app = make_client(tmp_path)
     with client:
         user, token = register_and_login(client, 1)
@@ -53,7 +54,10 @@ def test_active_user_can_switch_modes_and_login_returns_current_mode(tmp_path):
         })
         assert login.status_code == 200
         assert login.json()["user"]["active_role_mode"] == "COURIER"
-        assert jwt.decode(login.json()["access_token"], SECRET, algorithms=["HS256"])["active_role_mode"] == "COURIER"
+        claims = jwt.decode(
+            login.json()["access_token"], jwt_public_key, algorithms=["RS256"]
+        )
+        assert claims["active_role_mode"] == "COURIER"
         assert app.state.database.find_user_profile(user["id"])["active_role_mode"] == "COURIER"
 
 
@@ -74,14 +78,30 @@ def test_invalid_role_mode_does_not_change_account(tmp_path, body):
 
 
 @pytest.mark.parametrize("token", [None, "malformed", "bad-signature", "expired"])
-def test_role_mode_requires_valid_token(tmp_path, token):
+def test_role_mode_requires_valid_token(
+    tmp_path, token, jwt_private_key, wrong_jwt_private_key
+):
     client, app = make_client(tmp_path)
     with client:
         user, _ = register_and_login(client, 1)
         if token == "bad-signature":
-            token = jwt.encode({"sub": user["id"], "exp": datetime.now(timezone.utc) + timedelta(minutes=5)}, "wrong", algorithm="HS256")
+            token = jwt.encode(
+                {
+                    "sub": user["id"],
+                    "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+                },
+                wrong_jwt_private_key,
+                algorithm="RS256",
+            )
         elif token == "expired":
-            token = jwt.encode({"sub": user["id"], "exp": datetime.now(timezone.utc) - timedelta(minutes=1)}, SECRET, algorithm="HS256")
+            token = jwt.encode(
+                {
+                    "sub": user["id"],
+                    "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+                },
+                jwt_private_key,
+                algorithm="RS256",
+            )
         response = client.patch(role_url(user), headers=headers(token) if token else {}, json={
             "active_role_mode": "COURIER",
         })

@@ -5,6 +5,11 @@ from uuid import uuid4
 
 import jwt
 from argon2 import PasswordHasher, exceptions as argon2_exceptions
+from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey, RSAPublicKey
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+    load_pem_public_key,
+)
 from fastapi import Body, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,12 +36,58 @@ from .api_schemas import (
 )
 
 
-ACCESS_TOKEN_TTL_SECONDS = 15 * 60 # 15 min sessions
+ACCESS_TOKEN_TTL_SECONDS = 15 * 60  # 15 min sessions
+
+
+def _key_material(explicit_value: str | None, value_name: str, path_name: str) -> bytes:
+    value = explicit_value or os.getenv(value_name)
+    if value:
+        return value.encode()
+
+    path = os.getenv(path_name)
+    if not path:
+        raise RuntimeError(f"{path_name} is required")
+    try:
+        with open(path, "rb") as key_file:
+            return key_file.read()
+    except OSError as error:
+        raise RuntimeError(f"Could not read {path_name}: {path}") from error
+
+
+def _load_signing_keys(
+    private_key: str | None, public_key: str | None
+) -> tuple[RSAPrivateKey, RSAPublicKey]:
+    try:
+        loaded_private_key = load_pem_private_key(
+            _key_material(
+                private_key, "JWT_PRIVATE_KEY", "JWT_PRIVATE_KEY_PATH"
+            ),
+            password=None,
+        )
+        loaded_public_key = load_pem_public_key(
+            _key_material(public_key, "JWT_PUBLIC_KEY", "JWT_PUBLIC_KEY_PATH")
+        )
+    except (TypeError, ValueError) as error:
+        raise RuntimeError("JWT signing keys must be valid PEM-encoded RSA keys") from error
+
+    if not isinstance(loaded_private_key, RSAPrivateKey) or not isinstance(
+        loaded_public_key, RSAPublicKey
+    ):
+        raise RuntimeError("JWT signing keys must be RSA keys")
+    if loaded_private_key.key_size < 2048:
+        raise RuntimeError("JWT private key must be at least 2048 bits")
+    if (
+        loaded_private_key.public_key().public_numbers()
+        != loaded_public_key.public_numbers()
+    ):
+        raise RuntimeError("JWT private and public keys do not match")
+    return loaded_private_key, loaded_public_key
 
 
 def create_app(
     database_url: str | None = None,
-    jwt_secret: str | None = None,
+    jwt_private_key: str | None = None,
+    jwt_public_key: str | None = None,
 ) -> FastAPI:
     
     database_url = database_url or os.getenv("DATABASE_URL")
@@ -48,9 +99,9 @@ def create_app(
     # verify a hash even for unknown emails to disguise timing differences between valid and invalid logins
     dummy_password_hash = password_hasher.hash("TimingOnly1!")
 
-    signing_secret = jwt_secret or os.getenv("JWT_SECRET")
-    if not signing_secret:
-        raise RuntimeError("JWT_SECRET is required")
+    signing_key, verification_key = _load_signing_keys(
+        jwt_private_key, jwt_public_key
+    )
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -193,7 +244,7 @@ def create_app(
             "iat": issued_at,
             "exp": expires_at,
         }
-        access_token = jwt.encode(claims, signing_secret, algorithm="HS256")
+        access_token = jwt.encode(claims, signing_key, algorithm="RS256")
 
         return {
             "access_token": access_token,
@@ -221,8 +272,8 @@ def create_app(
         try:
             claims = jwt.decode(
                 token,
-                signing_secret,
-                algorithms=["HS256"],
+                verification_key,
+                algorithms=["RS256"],
                 options={"require": ["sub", "exp"]},
             )
         except jwt.PyJWTError as error:
