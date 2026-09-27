@@ -1,4 +1,15 @@
 services:
+  user-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: user_db
+      POSTGRES_USER: user_service
+      POSTGRES_PASSWORD: user_service_local_dev
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+
   supplier-db:
     image: postgres:17
     environment:
@@ -11,4 +22,5 @@ services:
       - supplier-db-data:/var/lib/postgresql/data
 
 volumes:
+  user-db-data:
   supplier-db-data:
