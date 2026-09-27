@@ -39,11 +39,23 @@ Create `user-service/.env` with:
 ```dotenv
 DATABASE_URL=sqlite:///data/users.db
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-JWT_SECRET=replace-with-a-long-random-local-secret
+JWT_PRIVATE_KEY_PATH=keys/jwt-private.pem
+JWT_PUBLIC_KEY_PATH=keys/jwt-public.pem
 ```
 
-Replace the secret before starting. This file is ignored by Git. All three
-variables are required. The User Service currently uses SQLite.
+Generate the local RS256 signing key pair from `user-service/`:
+
+```bash
+mkdir -p keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out keys/jwt-private.pem
+openssl pkey -in keys/jwt-private.pem -pubout -out keys/jwt-public.pem
+chmod 600 keys/jwt-private.pem
+```
+
+The key files and environment file are ignored by Git.
+Private key is available only to User Service; services that validate access tokens locally receive only `jwt-public.pem`.
+
+The User Service currently uses SQLite.
 If these variables are already exported, omit `--env-file .env`.
 If your existing configuration is in `.env.dev`, use `--env-file .env.dev` instead.
 

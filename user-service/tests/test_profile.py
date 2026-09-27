@@ -7,11 +7,8 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
-SECRET = "test-signing-secret"
-
-
 def setup_users(tmp_path):
-    app = create_app(f"sqlite:///{tmp_path / 'users.db'}", jwt_secret=SECRET)
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     client = TestClient(app)
     client.__enter__()
     users = []
@@ -81,13 +78,29 @@ def test_rejects_invalid_or_protected_changes(tmp_path, changes):
 
 
 @pytest.mark.parametrize('token', [None, 'malformed', 'wrong-key', 'expired'])
-def test_rejects_invalid_tokens(tmp_path, token):
+def test_rejects_invalid_tokens(
+    tmp_path, token, jwt_private_key, wrong_jwt_private_key
+):
     client, app, users, valid_token = setup_users(tmp_path)
     try:
         if token == 'wrong-key':
-            token = jwt.encode({'sub': users[0]['id'], 'exp': datetime.now(timezone.utc) + timedelta(minutes=5)}, 'wrong', algorithm='HS256')
+            token = jwt.encode(
+                {
+                    'sub': users[0]['id'],
+                    'exp': datetime.now(timezone.utc) + timedelta(minutes=5),
+                },
+                wrong_jwt_private_key,
+                algorithm='RS256',
+            )
         elif token == 'expired':
-            token = jwt.encode({'sub': users[0]['id'], 'exp': datetime.now(timezone.utc) - timedelta(minutes=1)}, SECRET, algorithm='HS256')
+            token = jwt.encode(
+                {
+                    'sub': users[0]['id'],
+                    'exp': datetime.now(timezone.utc) - timedelta(minutes=1),
+                },
+                jwt_private_key,
+                algorithm='RS256',
+            )
         headers = auth(token) if token else {}
         assert client.patch(f"/api/v1/users/{users[0]['id']}", headers=headers, json={'display_name': 'Changed'}).status_code == 401
         assert client.get(f"/api/v1/users/{users[0]['id']}", headers=headers).status_code == 401
