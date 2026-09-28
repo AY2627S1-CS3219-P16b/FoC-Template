@@ -5,14 +5,17 @@ is the access rules and the mapping from a failed write to a status code, not
 the SQL. Storage behaviour is covered by the live database tests.
 """
 
-import base64
 from datetime import time
-import json
+import time as time_module
 import unittest
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
-import httpx
+import jwt
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import (
+    Encoding, NoEncryption, PrivateFormat,
+)
 from fastapi.testclient import TestClient
 
 from app.admin_queries import (
@@ -42,18 +45,23 @@ def supplier_row(**overrides):
 
 
 class AdminEndpointTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        cls.private_pem = cls.private_key.private_bytes(
+            Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+
     def setUp(self):
         self.user_id = str(uuid4())
+        # Read by token() on every call, so mutating this mid-test (as the
+        # non-admin test does) changes what the next signed token claims.
         self.profile = dict(id=self.user_id, auth_role="ADMIN",
                             active_role_mode="REQUESTER", account_status="ACTIVE")
         self.engine = MagicMock()
-        with patch("app.main.create_database_engine", return_value=self.engine):
+        with patch("app.main.create_database_engine", return_value=self.engine), \
+             patch("app.main.load_jwt_public_key", return_value=self.private_key.public_key()):
             self.app = create_app()
-        self.upstream = httpx.Client(
-            base_url="http://user-service",
-            transport=httpx.MockTransport(lambda request: httpx.Response(200, json=self.profile)),
-        )
-        self.app.state.user_client = self.upstream
+        self.app.state.jwt_public_key = self.private_key.public_key()
         self.app.state.database = self.engine
         self.client = TestClient(self.app)
         self.place_id = str(uuid4())
@@ -75,12 +83,12 @@ class AdminEndpointTests(unittest.TestCase):
 
     def tearDown(self):
         self.client.close()
-        self.upstream.close()
 
     def token(self):
-        payload = {"sub": self.user_id}
-        encoded = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
-        return {"Authorization": f"Bearer header.{encoded}.signature"}
+        payload = {**self.profile, "sub": self.profile["id"],
+                  "exp": int(time_module.time()) + 900}
+        encoded = jwt.encode(payload, self.private_pem, algorithm="RS256")
+        return {"Authorization": f"Bearer {encoded}"}
 
     def call(self, method, path, body, **headers):
         send = getattr(self.client, method)

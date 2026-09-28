@@ -1,7 +1,4 @@
 from contextlib import asynccontextmanager
-import os
-
-import httpx
 from math import ceil
 from uuid import UUID
 
@@ -29,7 +26,7 @@ from .api_schemas import (
     SupplierResponse,
     SupplierUpdate,
 )
-from .auth import CurrentUser, admin_reason, current_user, require_admin
+from .auth import CurrentUser, admin_reason, current_user, load_jwt_public_key, require_admin
 from .classification import SUPPLIER_TYPES
 from .database import create_database_engine
 from .schema import metadata
@@ -48,6 +45,9 @@ from .supplier_queries import (
 
 def create_app() -> FastAPI:
     engine = create_database_engine()
+    # Read once at startup, not per request: the same public key verifies
+    # every token for the life of the process.
+    public_key = load_jwt_public_key()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -58,12 +58,8 @@ def create_app() -> FastAPI:
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
             app.state.database = engine
-            with httpx.Client(
-                base_url=os.getenv("USER_SERVICE_URL", "http://127.0.0.1:8000"),
-                timeout=3.0, follow_redirects=False, trust_env=False,
-            ) as user_client:
-                app.state.user_client = user_client
-                yield
+            app.state.jwt_public_key = public_key
+            yield
         finally:
             engine.dispose()
 

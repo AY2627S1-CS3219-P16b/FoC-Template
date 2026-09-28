@@ -36,18 +36,15 @@ paste the access token returned by User Service login (without the Bearer prefix
 ### Authentication
 
 Every endpoint requires `Authorization: Bearer <access_token>`, obtained from
-User Service login. Tokens are verified through User Service on each request, so
-it must be running and `USER_SERVICE_URL` must point at it (default
-`http://127.0.0.1:8000`; in containers use the service's network address, not
-localhost). Supplier Service holds no JWT secret of its own.
+User Service login. Tokens are verified **locally**: User Service signs them
+with RS256 and shares only the public key (`JWT_PUBLIC_KEY_PATH`), which can
+verify a signature but never produce one. Supplier Service never calls User
+Service to authenticate a caller and never holds its private key, so browsing
+and admin actions keep working even if User Service is down.
 
-Verifying on every request means a suspended account loses access immediately
-rather than when its token expires.
-
-| Status | Meaning                                                   |
-| ------ | --------------------------------------------------------- |
-| `401`  | Missing, invalid or expired token, or an inactive account |
-| `503`  | User Service unreachable within three seconds             |
+| Status | Meaning                                               |
+| ------ | ------------------------------------------------------ |
+| `401`  | Missing, invalid, expired, or wrongly-signed token, or a token claiming an inactive account |
 
 Any logged-in user can read. Changing records requires `auth_role` of `ADMIN`,
 which returns `403` when the caller is known but not an admin.
