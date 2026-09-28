@@ -15,6 +15,10 @@ from app.schema import places, suppliers
 from app.seed import DEFAULT_CSV, read_suppliers, seed
 
 
+# Required columns, supplied where the test is about some other constraint.
+HOURS = {"opening_time": "08:00", "closing_time": "18:00"}
+
+
 class PlaceNormalizationTests(unittest.TestCase):
     def test_formatting_variants_match(self):
         for value in ("COM 2", "com2", "Com  2", "C O M 2", "Com-2"):
@@ -114,22 +118,38 @@ class PlaceDatabaseTests(unittest.TestCase):
             invalid_operations = [
                 delete(places).where(places.c.id == place_id),
                 insert(places).values(name="COM 2"),
-                insert(suppliers).values(name="Bad FK", supplier_type="FOOD_BEVERAGE", place_id=uuid4()),
-                insert(suppliers).values(name="No place", supplier_type="FOOD_BEVERAGE"),
-                insert(suppliers).values(name=" ", supplier_type="FOOD_BEVERAGE", place_id=place_id),
-                insert(suppliers).values(name="Bad coordinate", supplier_type="FOOD_BEVERAGE", place_id=place_id, latitude=91),
+                insert(suppliers).values(name="Bad FK", supplier_type="FOOD_BEVERAGE", place_id=uuid4(), **HOURS),
+                insert(suppliers).values(name="No place", supplier_type="FOOD_BEVERAGE", **HOURS),
+                insert(suppliers).values(name=" ", supplier_type="FOOD_BEVERAGE", place_id=place_id, **HOURS),
+                insert(suppliers).values(name="Bad coordinate", supplier_type="FOOD_BEVERAGE", place_id=place_id, latitude=91, **HOURS),
+                # Hours are required, so Order Service can tell whether a supplier is open.
+                insert(suppliers).values(name="No hours", supplier_type="FOOD_BEVERAGE", place_id=place_id),
             ]
             for statement in invalid_operations:
                 with self.assertRaises(IntegrityError):
                     with connection.begin_nested():
                         connection.execute(statement)
-            # Unknown floors must not bypass supplier uniqueness.
-            values = dict(name="Duplicate test", supplier_type="FOOD_BEVERAGE", place_id=place_id)
+            # Unknown floors must not bypass supplier uniqueness, and neither
+            # must a different spelling of the same name.
+            values = dict(name="Duplicate test", supplier_type="FOOD_BEVERAGE",
+                          place_id=place_id, **HOURS)
             connection.execute(insert(suppliers).values(**values))
-            with self.assertRaises(IntegrityError):
-                with connection.begin_nested():
-                    connection.execute(insert(suppliers).values(**values))
-            connection.execute(delete(suppliers).where(suppliers.c.name == "Duplicate test"))
+            for spelling in ("Duplicate test", "duplicate  test", "DUPLICATE-TEST"):
+                with self.assertRaises(IntegrityError, msg=spelling):
+                    with connection.begin_nested():
+                        connection.execute(
+                            insert(suppliers).values({**values, "name": spelling})
+                        )
+            # A different name at the same place is a separate supplier, not a
+            # duplicate: the rule compares spellings, not meanings.
+            connection.execute(insert(suppliers).values(
+                {**values, "name": "Duplicate test @ NUS"}
+            ))
+            # A different floor is a separate branch of the same shop.
+            connection.execute(insert(suppliers).values({**values, "floor": "2"}))
+            connection.execute(delete(suppliers).where(
+                suppliers.c.name.like("Duplicate test%")
+            ))
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 name="Edited supplier", is_active=False
             ))

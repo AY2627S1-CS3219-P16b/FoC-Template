@@ -1,17 +1,17 @@
 Name,Type,Tags,Building,Floor,Location Description,Latitude,Longitude,StartingTime,ClosingTime,ImageURL
-Anna's x Soup Union,FOOD_BEVERAGE,,Central Library,1,Next to NUS Co-op,1.296444,103.773032,0900hrs,1800hrs,https://github.com/CS3219-AY2627S1/FoC-Template/blob/main/data/images/ANNA.jpeg
-NUS Co-op,RETAIL,,Central Library,1,Inside the library on the right side,1.2967866,103.7732677,0900hrs,1600hrs,https://github.com/CS3219-AY2627S1/FoC-Template/blob/main/data/images/NUS_COOP.jpeg
-Printer @ Com 2,FACILITY,printing,COM2,1,Next to LT19,1.2938347,103.7744572,0000hrs,2359hrs,https://github.com/CS3219-AY2627S1/FoC-Template/blob/main/data/images/PRINTER_COM2.jpeg
-Cool Spot,FOOD_BEVERAGE,,COM2,1,Opp LT16,1.2940156,103.7738478,0900hrs,2130hrs,https://github.com/CS3219-AY2627S1/FoC-Template/blob/main/data/images/COOL_SPOT.jpeg
-InstaChef,FOOD_BEVERAGE,,COM3,1,"Beside Terrace, near the foyer",1.2938898,103.7736305,0000hrs,2359hrs,https://github.com/CS3219-AY2627S1/FoC-Template/blob/main/data/images/INSTACHEF.jpeg
-Cafe+ Robot Cafe,FOOD_BEVERAGE,coffee,Central Library,1,Opp to central library entrance,1.296444,103.773032,0000hrs,2359hrs,https://github.com/CS3219-AY2627S1/FoC-Template/blob/main/data/images/ROBOT_CAFE.jpeg
+Anna's x Soup Union,FOOD_BEVERAGE,,Central Library,1,Next to NUS Co-op,1.296444,103.773032,0900hrs,1800hrs,https://raw.githubusercontent.com/CS3219-AY2627S1/FoC-Template/main/data/images/ANNA.jpeg
+NUS Co-op,RETAIL,,Central Library,1,Inside the library on the right side,1.2967866,103.7732677,0900hrs,1600hrs,https://raw.githubusercontent.com/CS3219-AY2627S1/FoC-Template/main/data/images/NUS_COOP.jpeg
+Printer @ Com 2,FACILITY,printing,COM2,1,Next to LT19,1.2938347,103.7744572,0000hrs,2359hrs,https://raw.githubusercontent.com/CS3219-AY2627S1/FoC-Template/main/data/images/PRINTER_COM2.jpeg
+Cool Spot,FOOD_BEVERAGE,,COM2,1,Opp LT16,1.2940156,103.7738478,0900hrs,2130hrs,https://raw.githubusercontent.com/CS3219-AY2627S1/FoC-Template/main/data/images/COOL_SPOT.jpeg
+InstaChef,FOOD_BEVERAGE,,COM3,1,"Beside Terrace, near the foyer",1.2938898,103.7736305,0000hrs,2359hrs,https://raw.githubusercontent.com/CS3219-AY2627S1/FoC-Template/main/data/images/INSTACHEF.jpeg
+Cafe+ Robot Cafe,FOOD_BEVERAGE,coffee,Central Library,1,Opp to central library entrance,1.296444,103.773032,0000hrs,2359hrs,https://raw.githubusercontent.com/CS3219-AY2627S1/FoC-Template/main/data/images/ROBOT_CAFE.jpeg
 A Hot Hideout,FOOD_BEVERAGE,,Prince George's Park,2,Near PGP entrance,1.2908445,103.7770891,1100hrs,2130hrs,
 Arise and Shine,FOOD_BEVERAGE,,Engineering Block E4,4,Near LT6,1.2991517,103.769064,0800hrs,1800hrs,
 Bakehaus / Aurea,FOOD_BEVERAGE,,The Ridge,1,Near COM2,1.2946778,103.7707872,0800hrs,2100hrs,
 Central Square @ YIH,FOOD_BEVERAGE,,Yusof Ishak House,1,Closest to Opp UHC bus stop,1.2984401,103.7726256,0800hrs,2000hrs,
 Pasta Express,FOOD_BEVERAGE,,Frontier,1,Aircon section,1.2947819,103.7704435,0930hrs,1930hrs,
 TOMORO COFFEE,FOOD_BEVERAGE,coffee,Hon Sui Sen Memorial Library,2,Inside HSSML,1.2931259,103.7719943,0815hrs,1800hrs,
-Octobox,RETAIL,,Prince George's Park,2,Near PGP entrance,1.2904347,103.7787588,0000hrs,2359hrs,
+Octobox,RETAIL,convenience,Prince George's Park,2,Near PGP entrance,1.2904347,103.7787588,0000hrs,2359hrs,
 Smooy,FOOD_BEVERAGE,,COM3,1,Beside Terrace,1.2948308,103.7716305,1100hrs,2100hrs,
 Goh Bros E-Print Pte Ltd,FACILITY,printing,Yusof Ishak House,5,Take the long staircase up YIH,1.2984905,103.7720544,0900hrs,1800hrs,
 Cheers Unmanned Convenience Store,RETAIL,convenience,Engineering Block E3,4,Take right from Arise n Shine,1.2994341,103.7526298,0000hrs,2359hrs,

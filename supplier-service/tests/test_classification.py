@@ -98,10 +98,17 @@ class ClassificationDatabaseTests(unittest.TestCase):
             self.assertEqual(Counter(row["supplier_type"] for row in stored),
                              {"FOOD_BEVERAGE": 16, "RETAIL": 3, "FACILITY": 2})
             self.assertEqual(sum("coffee" in row["tags"] for row in stored), 5)
+            from app.supplier_queries import list_suppliers
+            for search in ("cof", "coffee", "COFFEE"):
+                matches = list_suppliers(connection, search=search)
+                self.assertEqual(len(matches), 5)
+                self.assertTrue(all("coffee" in row["tags"] for row in matches))
+
             place_id = connection.scalar(select(places.c.id).limit(1))
             row = connection.execute(insert(suppliers).values(
                 name="New cafe", supplier_type="FOOD_BEVERAGE", place_id=place_id,
                 tags=[" Coffee ", "coffee", "BUBBLE   TEA"],
+                opening_time="08:00", closing_time="18:00",
             ).returning(suppliers)).mappings().one()
             self.assertEqual(row["tags"], ["bubble tea", "coffee"])
             connection.execute(update(suppliers).where(suppliers.c.id == row["id"]).values(
@@ -117,10 +124,6 @@ class ClassificationDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 tags=["Admin Tag"], supplier_type="RETAIL"
             ))
-            self.assertTrue(connection.scalar(text(
-                "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE schemaname = :schema "
-                "AND indexname = 'ix_suppliers_tags' AND indexdef LIKE '%USING gin%')"
-            ), {"schema": self.schema}))
         self.assertEqual(seed(self.db, records), (0, 22))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()

@@ -3,6 +3,56 @@
 This guide covers the User Service, Supplier Service, and React frontend.
 Run commands from the repository root unless a step says otherwise.
 
+## Start everything with Docker (recommended for the demo)
+
+Docker Desktop must be running. Stop any manually started frontend or Uvicorn
+servers first so ports 5173, 8000 and 8001 are free.
+
+On a fresh checkout, generate the JWT keys once using the key-generation commands
+in the User Service setup below. Keep existing keys if they already exist.
+Compose mounts those files read-only; only User Service receives the private key.
+No Python/Node installation or service `.env` files are needed for this Docker path.
+
+From the repository root:
+
+```bash
+docker compose up --build -d
+```
+
+Open the frontend at <http://localhost:5173>, User Service Swagger at
+<http://localhost:8000/docs>, and Supplier Service Swagger at
+<http://localhost:8001/docs>. This starts both databases, both APIs, and the
+Vite development frontend. Containers use database port 5432 internally.
+Database health checks run before the APIs start; the frontend waits for both APIs.
+
+For a fresh supplier database only:
+
+```bash
+docker compose exec supplier-service python -m app.seed
+```
+
+Register an account through the frontend. For the first admin, replace the email:
+
+```bash
+docker compose exec user-service python -m app.bootstrap_admin user-email@u.nus.edu
+```
+
+Existing database volumes and accounts are retained; daily startup does not seed
+or bootstrap again. After the first build, use `docker compose up -d`; after code
+changes, use `docker compose up --build -d` to rebuild the affected images.
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 user-service supplier-service frontend
+docker compose stop
+```
+
+Do not add `-v` to `docker compose down` unless you intend to erase the databases.
+The remaining sections describe the alternative of running Python and Node
+on your laptop while Docker runs only the databases.
+
 ## Prerequisites
 
 - Python 3.12 (`python3.12 --version`). Use this version for both virtual
@@ -89,11 +139,24 @@ Create `supplier-service/.env.dev` with:
 
 ```dotenv
 DATABASE_URL=postgresql+psycopg://supplier:supplier_local_dev@localhost:5433/supplier_db
+JWT_PUBLIC_KEY_PATH=keys/jwt-public.pem
 ```
 
 These local development credentials match `compose.yaml`. The environment
 file is ignored by Git. FastAPI runs on your Mac and connects to port 5433;
 Docker forwards that connection to PostgreSQL on port 5432 inside the container.
+
+Copy User Service's public key so Supplier Service can verify tokens locally,
+without calling User Service:
+
+```bash
+mkdir -p supplier-service/keys
+cp user-service/keys/jwt-public.pem supplier-service/keys/jwt-public.pem
+```
+
+Only the public key is copied; `jwt-private.pem` stays in User Service. The
+key files are ignored by Git, so this copy step is needed again on a fresh
+clone.
 
 From `supplier-service/`, import the initial supplier records:
 
@@ -119,7 +182,8 @@ python -m uvicorn app.main:create_app --factory --reload --port 8001
 
 Wait for `Application startup complete` and leave it running. Startup checks
 the PostgreSQL connection. API documentation: <http://localhost:8001/docs>;
-no supplier endpoints have been added yet.
+supplier read endpoints require a User Service login token. User Service is needed for login; Supplier Service verifies tokens locally. In Swagger, use Authorize with the access token
+returned by login.
 
 See the [Supplier Service README](supplier-service/README.md) for schema and
 design decisions, seed-data conventions, database maintenance, and tests.
@@ -138,8 +202,8 @@ Open <http://localhost:5173>. Register at
 <http://localhost:5173/?screen=register>, then log in at
 <http://localhost:5173/?screen=login>.
 
-Vite currently forwards `/api` requests to User Service on port 8000. Supplier
-screens still use mock data; supplier API integration is not implemented yet.
+Vite forwards supplier, place, and supplier-audit requests to Supplier Service
+on port 8001, and other `/api` requests to User Service on port 8000.
 For a remotely hosted User Service, set `VITE_USER_API_URL` to its origin before
 starting or building the frontend.
 

@@ -1,0 +1,11 @@
+node_modules
+.venv
+.env*
+keys
+*.pem
+*.key
+__pycache__
+.pytest_cache
+.git
+dist
+*.db

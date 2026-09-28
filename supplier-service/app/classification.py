@@ -43,8 +43,8 @@ class SupplierTags(TypeDecorator):
     """PostgreSQL TEXT[] normalizing writes and array-valued comparison binds.
 
     contains([...]) and overlap([...]) normalize array arguments. Scalar
-    any(value) does not pass through normalize_tags. Future tag filtering must
-    normalize request input and use array-valued containment/overlap operators.
+    any(value) does not pass through normalize_tags. Browsing searches tags
+    as text through q; it does not expose an exact-tag filter.
 
     Future admin request models must call normalize_tags before database writes
     to return HTTP 422 for invalid input. Request models are deferred to the

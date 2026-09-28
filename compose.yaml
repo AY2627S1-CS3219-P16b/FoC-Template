@@ -7,6 +7,11 @@ services:
       POSTGRES_PASSWORD: user_service_local_dev
     ports:
       - "127.0.0.1:5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_service -d user_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - user-db-data:/var/lib/postgresql/data
 
@@ -18,8 +23,83 @@ services:
       POSTGRES_PASSWORD: supplier_local_dev
     ports:
       - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U supplier -d supplier_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     volumes:
       - supplier-db-data:/var/lib/postgresql/data
+
+  user-service:
+    build: ./user-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://user_service:user_service_local_dev@user-db:5432/user_db
+      JWT_PRIVATE_KEY_PATH: /run/keys/jwt-private.pem
+      JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    volumes:
+      - type: bind
+        source: ./user-service/keys/jwt-private.pem
+        target: /run/keys/jwt-private.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ./user-service/keys/jwt-public.pem
+        target: /run/keys/jwt-public.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      user-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  supplier-service:
+    build: ./supplier-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://supplier:supplier_local_dev@supplier-db:5432/supplier_db
+      JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
+    volumes:
+      - type: bind
+        source: ./user-service/keys/jwt-public.pem
+        target: /run/keys/jwt-public.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - ./data/csv:/data/csv:ro
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      supplier-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/openapi.json', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  frontend:
+    build: ./frontend
+    environment:
+      USER_API_PROXY_TARGET: http://user-service:8000
+      SUPPLIER_API_PROXY_TARGET: http://supplier-service:8001
+    ports:
+      - "127.0.0.1:5173:5173"
+    depends_on:
+      user-service:
+        condition: service_healthy
+      supplier-service:
+        condition: service_healthy
 
 volumes:
   user-db-data:

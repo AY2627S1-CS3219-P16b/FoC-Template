@@ -8,6 +8,7 @@ import CourierActiveSection from "./components/CourierActiveSection";
 import CreditsSection from "./components/CreditsSection";
 import ProfileSection from "./components/ProfileSection";
 import AdminSection from "./components/AdminSection";
+import SupplierAdminSection from "./components/SupplierAdminSection";
 import {
   initialSuppliers,
   initialOrders,
@@ -865,7 +866,7 @@ export default function App() {
         {/* REQUESTER FLOWS */}
         {role === "REQUESTER" && activeTab === "suppliers" && (
           <SuppliersSection
-            suppliers={suppliers}
+            token={accessToken}
             onQuickOpenModal={handleQuickOpenModal}
           />
         )}
@@ -919,7 +920,10 @@ export default function App() {
           />
         )}
         {activeTab === "admin" && (
-          <AdminSection token={accessToken} currentUserId={user.id} />
+          <>
+            <AdminSection token={accessToken} currentUserId={user.id} />
+            <SupplierAdminSection token={accessToken} />
+          </>
         )}
       </main>
 
