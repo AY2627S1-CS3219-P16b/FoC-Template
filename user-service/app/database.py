@@ -1,4 +1,3 @@
-from pathlib import Path
 from datetime import datetime, timezone
 from dataclasses import dataclass
 from uuid import uuid4
@@ -110,10 +109,10 @@ class Database:
 
     def __init__(self, database_url: str) -> None:
         url = make_url(database_url)
-        if url.get_backend_name() == "sqlite" and url.database not in (None, ":memory:"):
-            Path(url.database).parent.mkdir(parents=True, exist_ok=True)
-
-        self.engine: Engine = create_engine(database_url)
+        engine_options: dict[str, object] = {"pool_pre_ping": True}
+        if url.get_backend_name() == "postgresql":
+            engine_options["connect_args"] = {"connect_timeout": 5}
+        self.engine: Engine = create_engine(database_url, **engine_options)
 
     def initialize(self) -> None:
         metadata.create_all(self.engine)
@@ -231,15 +230,17 @@ class Database:
         }
 
     def _lock_active_admins(self, connection: Connection) -> None:
+        # SQLite is retained only as the lightweight unit-test backend. The
+        # deployed PostgreSQL path uses row locks below.
         if self.engine.dialect.name == "sqlite":
             connection.exec_driver_sql("BEGIN IMMEDIATE")
-        else:
-            connection.execute(
-                select(users.c.id)
-                .where(users.c.auth_role == "ADMIN", users.c.account_status == "ACTIVE")
-                .order_by(users.c.id)
-                .with_for_update()
-            ).all()
+            return
+        connection.execute(
+            select(users.c.id)
+            .where(users.c.auth_role == "ADMIN", users.c.account_status == "ACTIVE")
+            .order_by(users.c.id)
+            .with_for_update()
+        ).all()
 
     def _require_admin(self, connection: Connection, actor_id: str) -> None:
         actor = connection.execute(
@@ -365,6 +366,8 @@ class Database:
     def bootstrap_first_admin(self, email: str) -> BootstrapResult:
         try:
             with self.engine.begin() as connection:
+                # Keep concurrent bootstrap deterministic in SQLite-backed unit
+                # tests; PostgreSQL resolves this with its unique-key conflict.
                 if self.engine.dialect.name == "sqlite":
                     connection.exec_driver_sql("BEGIN IMMEDIATE")
                 bootstrap = connection.execute(

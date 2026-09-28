@@ -7,15 +7,11 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 
 
-JWT_SECRET = "test-signing-secret"
 PASSWORD = "StrongPass1!"
 
 
 def make_client(tmp_path):
-    app = create_app(
-        f"sqlite:///{tmp_path / 'users.db'}",
-        jwt_secret=JWT_SECRET,
-    )
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     return TestClient(app), app
 
 
@@ -32,7 +28,9 @@ def register(client):
     return response.json()
 
 
-def test_active_user_can_login_and_receives_signed_claims(tmp_path):
+def test_active_user_can_login_and_receives_signed_claims(
+    tmp_path, jwt_public_key, wrong_jwt_public_key
+):
     client, _ = make_client(tmp_path)
     with client:
         registered_user = register(client)
@@ -46,10 +44,13 @@ def test_active_user_can_login_and_receives_signed_claims(tmp_path):
     assert body["token_type"] == "bearer"
     assert body["expires_in"] == 900
     assert body["user"]["active_role_mode"] == "REQUESTER"
+    assert jwt.get_unverified_header(body["access_token"])["alg"] == "RS256"
 
-    claims = jwt.decode(body["access_token"], JWT_SECRET, algorithms=["HS256"])
+    claims = jwt.decode(body["access_token"], jwt_public_key, algorithms=["RS256"])
     with pytest.raises(jwt.InvalidSignatureError):
-        jwt.decode(body["access_token"], "wrong-secret", algorithms=["HS256"])
+        jwt.decode(
+            body["access_token"], wrong_jwt_public_key, algorithms=["RS256"]
+        )
     assert claims["sub"] == registered_user["id"]
     assert claims["user_id"] == registered_user["id"]
     assert claims["email"] == "e0123456@u.nus.edu"

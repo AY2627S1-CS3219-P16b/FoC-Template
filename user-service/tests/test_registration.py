@@ -6,9 +6,7 @@ from app.main import create_app
 
 
 def make_client(tmp_path):
-    app = create_app(
-        f"sqlite:///{tmp_path / 'users.db'}", jwt_secret="test-signing-secret"
-    )
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     return TestClient(app), app
 
 
@@ -29,20 +27,55 @@ def test_database_url_is_required(monkeypatch):
         create_app()
 
 
-def test_jwt_secret_is_required(tmp_path, monkeypatch):
-    monkeypatch.delenv("JWT_SECRET", raising=False)
+def test_jwt_private_key_is_required(tmp_path, monkeypatch):
+    monkeypatch.delenv("JWT_PRIVATE_KEY", raising=False)
+    monkeypatch.delenv("JWT_PRIVATE_KEY_PATH", raising=False)
 
-    with pytest.raises(RuntimeError, match="JWT_SECRET is required"):
+    with pytest.raises(RuntimeError, match="JWT_PRIVATE_KEY_PATH is required"):
         create_app(f"sqlite:///{tmp_path / 'users.db'}")
+
+
+def test_jwt_public_key_is_required(tmp_path, monkeypatch):
+    monkeypatch.delenv("JWT_PUBLIC_KEY", raising=False)
+    monkeypatch.delenv("JWT_PUBLIC_KEY_PATH", raising=False)
+
+    with pytest.raises(RuntimeError, match="JWT_PUBLIC_KEY_PATH is required"):
+        create_app(f"sqlite:///{tmp_path / 'users.db'}")
+
+
+def test_jwt_private_and_public_keys_must_match(
+    tmp_path, jwt_private_key, wrong_jwt_public_key
+):
+    with pytest.raises(RuntimeError, match="do not match"):
+        create_app(
+            f"sqlite:///{tmp_path / 'users.db'}",
+            jwt_private_key=jwt_private_key,
+            jwt_public_key=wrong_jwt_public_key,
+        )
+
+
+def test_jwt_keys_can_be_loaded_from_files(
+    tmp_path, monkeypatch, jwt_private_key, jwt_public_key
+):
+    private_key_path = tmp_path / "jwt-private.pem"
+    public_key_path = tmp_path / "jwt-public.pem"
+    private_key_path.write_text(jwt_private_key)
+    public_key_path.write_text(jwt_public_key)
+    monkeypatch.delenv("JWT_PRIVATE_KEY")
+    monkeypatch.delenv("JWT_PUBLIC_KEY")
+    monkeypatch.setenv("JWT_PRIVATE_KEY_PATH", str(private_key_path))
+    monkeypatch.setenv("JWT_PUBLIC_KEY_PATH", str(public_key_path))
+
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
+
+    assert app.title == "Friend on Campus User Service"
 
 
 def test_cors_origins_are_required(tmp_path, monkeypatch):
     monkeypatch.delenv("CORS_ORIGINS")
 
     with pytest.raises(RuntimeError, match="CORS_ORIGINS is required"):
-        create_app(
-            f"sqlite:///{tmp_path / 'users.db'}", jwt_secret="test-signing-secret"
-        )
+        create_app(f"sqlite:///{tmp_path / 'users.db'}")
 
 
 def test_registers_user_with_defaults_and_no_optional_fields(tmp_path):

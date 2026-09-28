@@ -21,13 +21,16 @@ docker compose version
 ## First-time setup
 
 Complete these steps once per checkout and local database. Each developer
-has their own local data; Git shares source code and seed data, not databases.
+has their own local data; Git shares source code, not database contents.
 
 ### Terminal 1: User Service
 
 From the repository root:
 
 ```bash
+docker compose up -d user-db
+docker compose exec user-db pg_isready -U user_service -d user_db
+
 cd user-service
 python3.12 -m venv .venv
 source .venv/bin/activate
@@ -37,15 +40,23 @@ python -m pip install -r requirements.txt
 Create `user-service/.env` with:
 
 ```dotenv
-DATABASE_URL=sqlite:///data/users.db
+DATABASE_URL=postgresql+psycopg://user_service:user_service_local_dev@localhost:5434/user_db
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
-JWT_SECRET=replace-with-a-long-random-local-secret
+JWT_PRIVATE_KEY_PATH=keys/jwt-private.pem
+JWT_PUBLIC_KEY_PATH=keys/jwt-public.pem
 ```
 
-Replace the secret before starting. This file is ignored by Git. All three
-variables are required. The User Service currently uses SQLite.
-If these variables are already exported, omit `--env-file .env`.
-If your existing configuration is in `.env.dev`, use `--env-file .env.dev` instead.
+Generate the local RS256 signing key pair from `user-service/`:
+
+```bash
+mkdir -p keys
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out keys/jwt-private.pem
+openssl pkey -in keys/jwt-private.pem -pubout -out keys/jwt-public.pem
+chmod 600 keys/jwt-private.pem
+```
+
+The key files and environment file are ignored by Git.
+Private key is available only to User Service; services that validate access tokens locally receive only `jwt-public.pem`.
 
 Start the service in the same terminal:
 
@@ -158,9 +169,9 @@ Only an operator with database connection credentials can run this command.
 Repeating it for the same account succeeds without changing the account.
 It never resets a password, restores a demoted role, or reactivates a disabled
 account. Running it for a different account after initialization is rejected.
-SQLite takes a write lock before checking bootstrap state. The bootstrap
-table's unique key resolves concurrent inserts on PostgreSQL. Only one account
-is promoted; a concurrent repeat for the same account becomes a no-op.
+The bootstrap table's unique key resolves concurrent inserts on PostgreSQL.
+Only one account is promoted; a concurrent repeat for the same account becomes
+a no-op.
 Subsequent promotions use the authenticated admin API.
 
 ## Stopping locally
@@ -169,7 +180,7 @@ Press Ctrl+C in each application terminal. To stop PostgreSQL while keeping
 its data, run from the repository root:
 
 ```bash
-docker compose stop supplier-db
+docker compose stop user-db supplier-db
 ```
 
 Do not use `docker compose down -v` unless you intend to delete the database

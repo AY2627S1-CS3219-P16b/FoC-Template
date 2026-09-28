@@ -13,7 +13,6 @@ from app.main import create_app
 
 
 PASSWORD = "StrongPass1!"
-SECRET = "test-signing-secret"
 
 
 def register(client, number):
@@ -43,7 +42,7 @@ def headers(access_token, reason=None):
 
 @pytest.fixture
 def accounts(tmp_path):
-    app = create_app(f"sqlite:///{tmp_path / 'users.db'}", jwt_secret=SECRET)
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     with TestClient(app) as client:
         admin = register(client, 1)
         other = register(client, 2)
@@ -56,7 +55,7 @@ def accounts(tmp_path):
 
 
 def test_bootstrap_is_idempotent_and_requires_active_registered_account(tmp_path):
-    app = create_app(f"sqlite:///{tmp_path / 'users.db'}", jwt_secret=SECRET)
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     with TestClient(app) as client:
         first = register(client, 1)
         second = register(client, 2)
@@ -77,7 +76,7 @@ def test_bootstrap_is_idempotent_and_requires_active_registered_account(tmp_path
 
 def test_bootstrap_command_promotes_existing_account_once(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'users.db'}"
-    app = create_app(database_url, jwt_secret=SECRET)
+    app = create_app(database_url)
     with TestClient(app) as client:
         user = register(client, 1)
 
@@ -99,7 +98,7 @@ def test_bootstrap_command_promotes_existing_account_once(tmp_path):
 
 
 def test_bootstrap_does_not_restore_revoked_privileges_or_status(tmp_path):
-    app = create_app(f"sqlite:///{tmp_path / 'users.db'}", jwt_secret=SECRET)
+    app = create_app(f"sqlite:///{tmp_path / 'users.db'}")
     with TestClient(app) as client:
         first = register(client, 1)
         second = register(client, 2)
@@ -118,7 +117,7 @@ def test_bootstrap_does_not_restore_revoked_privileges_or_status(tmp_path):
 
 def test_concurrent_bootstrap_for_same_account_is_harmless(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'users.db'}"
-    app = create_app(database_url, jwt_secret=SECRET)
+    app = create_app(database_url)
     with TestClient(app) as client:
         user = register(client, 1)
         barrier = Barrier(2)
@@ -141,7 +140,7 @@ def test_concurrent_bootstrap_for_same_account_is_harmless(tmp_path):
 
 def test_concurrent_bootstrap_for_different_accounts_has_one_winner(tmp_path):
     database_url = f"sqlite:///{tmp_path / 'users.db'}"
-    app = create_app(database_url, jwt_secret=SECRET)
+    app = create_app(database_url)
     with TestClient(app) as client:
         first = register(client, 1)
         second = register(client, 2)
