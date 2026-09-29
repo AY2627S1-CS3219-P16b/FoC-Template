@@ -318,6 +318,132 @@ body {
   font-size: 13px;
 }
 
+/* Searchable hierarchy used by filtering and both admin location fields. */
+.place-tree-select {
+  position: relative;
+  width: 100%;
+  font-size: 13px;
+}
+
+.filter-place-tree {
+  flex: 0 1 260px;
+  min-width: 190px;
+}
+
+.place-tree-trigger {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid #cccccc;
+  background: #ffffff;
+  color: #222222;
+  font: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.place-tree-trigger:focus-visible,
+.place-tree-search:focus-visible,
+.place-tree-toggle:focus-visible,
+.place-tree-option:focus-visible,
+.place-tree-empty-option:focus-visible {
+  outline: 2px solid #1478d4;
+  outline-offset: 1px;
+}
+
+.place-tree-trigger:disabled {
+  background: #eeeeee;
+  color: #777777;
+  cursor: not-allowed;
+}
+
+.place-tree-panel {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 3px);
+  left: 0;
+  width: max(100%, 260px);
+  padding: 8px;
+  border: 1px solid #aaaaaa;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.16);
+}
+
+.place-tree-search {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid #cccccc;
+  font: inherit;
+}
+
+.place-tree-options {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 6px;
+}
+
+.place-tree-row {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.place-tree-toggle,
+.place-tree-toggle-spacer {
+  flex: 0 0 26px;
+  width: 26px;
+}
+
+.place-tree-toggle,
+.place-tree-option,
+.place-tree-empty-option {
+  border: 0;
+  background: transparent;
+  color: #222222;
+  font: inherit;
+}
+
+.place-tree-toggle {
+  height: 30px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.place-tree-option {
+  flex: 1;
+  padding: 7px 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.place-tree-empty-option {
+  width: 100%;
+  padding: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.place-tree-row:hover,
+.place-tree-empty-option:hover,
+.place-tree-option.is-selected,
+.place-tree-empty-option.is-selected {
+  background: #eef6ff;
+}
+
+.place-tree-option.is-selected,
+.place-tree-empty-option.is-selected {
+  font-weight: bold;
+}
+
+.place-tree-no-results {
+  padding: 10px 8px;
+  color: #666666;
+}
+
 /* Forms */
 .form-group {
   margin-bottom: 12px;
@@ -797,6 +923,13 @@ th {
   .landing-card,
   .auth-panel {
     padding: 34px 22px;
+  }
+  .filter-place-tree {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  .place-tree-panel {
+    width: 100%;
   }
 }
 
