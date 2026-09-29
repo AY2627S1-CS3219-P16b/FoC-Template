@@ -301,6 +301,7 @@ body {
 /* Filter bar */
 .filter-bar {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -924,9 +925,18 @@ th {
   .auth-panel {
     padding: 34px 22px;
   }
+  .filter-bar {
+    flex-direction: column;
+  }
+  .filter-bar > .search-input,
+  .filter-bar > .filter-select,
+  .filter-bar > .filter-place-tree,
+  .filter-bar > .btn {
+    width: 100%;
+    min-width: 0;
+  }
   .filter-place-tree {
     flex: 1 1 100%;
-    min-width: 100%;
   }
   .place-tree-panel {
     width: 100%;
