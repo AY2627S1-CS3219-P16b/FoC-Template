@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DEFAULT_SORT,
   canRetrySupplierRequest,
@@ -9,6 +9,7 @@ import {
   formatHours,
   formatPlace,
 } from '../api/suppliers';
+import PlaceTreeSelect from './PlaceTreeSelect';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -109,13 +110,6 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
     };
   }, [token, debouncedSearch, selectedCategory, selectedPlace, sort, page, retry]);
 
-  // A flat list keeps every hierarchy level selectable without tree symbols.
-  const placeOptions = useMemo(() => places
-    .map((place) => ({ ...place, label: formatPlace(place) }))
-    .sort((a, b) => a.label.localeCompare(b.label, 'en', {
-      sensitivity: 'base', numeric: true,
-    })), [places]);
-
   const suppliers = result?.items ?? [];
   const totalPages = result?.total_pages ?? 0;
   const hasActiveFilters =
@@ -164,22 +158,15 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
             </option>
           ))}
         </select>
-        <select
-          className="filter-select"
+        <PlaceTreeSelect
+          places={places}
           value={places.find((p) => p.id === selectedPlace || p.search_key === selectedPlace)?.id || selectedPlace}
-          onChange={(event) => setSelectedPlace(event.target.value)}
-          aria-label="Filter by location"
-        >
-          <option value="ALL">All Locations</option>
-          {selectedPlace !== 'ALL' && !places.some((p) => p.id === selectedPlace || p.search_key === selectedPlace) ? (
-            <option value={selectedPlace} disabled>Selected location unavailable</option>
-          ) : null}
-          {placeOptions.map((place) => (
-            <option key={place.id} value={place.id}>
-              {place.label}
-            </option>
-          ))}
-        </select>
+          onChange={setSelectedPlace}
+          emptyValue="ALL"
+          emptyLabel="All Locations"
+          ariaLabel="Filter by location"
+          className="filter-place-tree"
+        />
         <select
           className="filter-select"
           value={sort}

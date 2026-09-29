@@ -10,6 +10,7 @@ import {
   formatPlace,
   updateSupplier,
 } from "../api/suppliers";
+import PlaceTreeSelect from "./PlaceTreeSelect";
 
 const AUDIT_PAGE_SIZE = 10;
 const LIST_PAGE_SIZE = 100;
@@ -215,11 +216,6 @@ export default function SupplierAdminSection({ token }) {
       });
     return () => { active = false; };
   }, [token, auditPage, refresh]);
-
-  const placeOptions = useMemo(() => places
-    .map((place) => ({ ...place, label: formatPlace(place) }))
-    .sort((a, b) => a.label.localeCompare(b.label, "en", { sensitivity: "base", numeric: true })),
-  [places]);
 
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -473,17 +469,16 @@ export default function SupplierAdminSection({ token }) {
               </div>
               <div className="form-group field-wide">
                 <label htmlFor="supplier-place">Location<Required /></label>
-                <select
+                <PlaceTreeSelect
                   id="supplier-place"
+                  places={places}
                   value={form.place_id}
                   disabled={busy}
-                  onChange={(event) => setForm((c) => ({ ...c, place_id: event.target.value }))}
-                >
-                  <option value="">Select a location…</option>
-                  {placeOptions.map((place) => (
-                    <option key={place.id} value={place.id}>{place.label}</option>
-                  ))}
-                </select>
+                  onChange={(placeId) => setForm((c) => ({ ...c, place_id: placeId }))}
+                  emptyLabel="Select a location…"
+                  ariaLabel="Choose the supplier location"
+                />
+                <small>Choose the most specific known location.</small>
               </div>
               <div className="form-group field-wide">
                 <label htmlFor="supplier-tags">Tags</label>
@@ -569,17 +564,15 @@ export default function SupplierAdminSection({ token }) {
             </div>
             <div className="form-group">
               <label htmlFor="place-parent">Inside (optional)</label>
-              <select
+              <PlaceTreeSelect
                 id="place-parent"
+                places={places}
                 value={placeParent}
                 disabled={busy}
-                onChange={(event) => setPlaceParent(event.target.value)}
-              >
-                <option value="">Not inside another location</option>
-                {placeOptions.map((place) => (
-                  <option key={place.id} value={place.id}>{place.label}</option>
-                ))}
-              </select>
+                onChange={setPlaceParent}
+                emptyLabel="Not inside another location"
+                ariaLabel="Choose the parent location"
+              />
               <small>
                 Choose the building this sits in, so searching for the building
                 also finds suppliers here.
