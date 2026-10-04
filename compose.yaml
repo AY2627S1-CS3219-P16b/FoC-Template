@@ -31,6 +31,22 @@ services:
     volumes:
       - supplier-db-data:/var/lib/postgresql/data
 
+  credit-db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: credit_db
+      POSTGRES_USER: credit
+      POSTGRES_PASSWORD: credit_local_dev
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U credit -d credit_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - credit-db-data:/var/lib/postgresql/data
+
   user-service:
     build: ./user-service
     environment:
@@ -88,6 +104,31 @@ services:
       retries: 20
       start_period: 10s
 
+  credit-service:
+    build: ./credit-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://credit:credit_local_dev@credit-db:5432/credit_db
+      JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
+      INITIAL_CREDITS: 20
+    volumes:
+      - type: bind
+        source: ./user-service/keys/jwt-public.pem
+        target: /run/keys/jwt-public.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8002:8002"
+    depends_on:
+      credit-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/openapi.json', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
   frontend:
     build: ./frontend
     environment:
@@ -104,3 +145,4 @@ services:
 volumes:
   user-db-data:
   supplier-db-data:
+  credit-db-data:
