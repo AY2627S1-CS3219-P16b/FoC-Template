@@ -1,15 +1,10 @@
-# list_ledger(user_id)
-# reserve_credits(order_id, requester_user_id, amount)
-# release_reservation(order_id, requester_user_id)
-# transfer_reservation(order_id, requester_user_id, courier_user_id)
-
 """Credit database operations. Every change is recorded in the credit ledger log."""
 
 from datetime import date, datetime, time
 import os
 from uuid import UUID, uuid4
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
@@ -30,6 +25,14 @@ class NoChangeError(Exception):
 
 class DuplicateReservationError(Exception):
     """A credit reservation already exists for this order."""
+
+
+class ReservationNotFoundError(Exception):
+    """A credit reservation does not exist for this order."""
+
+
+class ReservationStateError(Exception):
+    """The reservation is not in the required state for this operation."""
 
 
 def _json_safe(value):
@@ -69,7 +72,7 @@ def _initial_credits() -> int:
 
 
 def get_account(connection: Connection, user_id: str | UUID) -> dict[str, object]:
-    user_id_text = str(user_id)
+    user_id_text = _required_text(user_id, "user_id")
     row = connection.execute(
         select(credit_accounts).where(credit_accounts.c.user_id == user_id_text)
     ).mappings().one_or_none()
@@ -84,7 +87,7 @@ def ensure_account(
     initial_credits: int | None = None,
 ) -> dict[str, object]:
     """Return the user's credit account, creating the initial allocation if needed."""
-    user_id_text = str(user_id)
+    user_id_text = _required_text(user_id, "user_id")
     existing = connection.execute(
         select(credit_accounts).where(credit_accounts.c.user_id == user_id_text)
     ).mappings().one_or_none()
@@ -139,7 +142,7 @@ def reserve_credits(
             credit_reservations.c.order_id == order_id_text
         )
     ).mappings().one_or_none()
-    
+
     if existing is not None:
         if (
             existing["requester_user_id"] == requester_user_id_text
@@ -214,12 +217,231 @@ def reserve_credits(
     )
 
 
-def list_ledger(connection: Connection, user_id: str | UUID) -> list[dict[str, object]]:
-    user_id_text = str(user_id)
+def list_ledger(
+    connection: Connection,
+    user_id: str | UUID,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, object]:
+    user_id_text = _required_text(user_id, "user_id")
+    if page < 1:
+        raise ValueError("page must be greater than or equal to 1")
+    if page_size < 1 or page_size > 100:
+        raise ValueError("page_size must be between 1 and 100")
+
     get_account(connection, user_id_text)
+    total = connection.execute(
+        select(func.count())
+        .select_from(credit_ledger_entries)
+        .where(credit_ledger_entries.c.user_id == user_id_text)
+    ).scalar_one()
+    offset = (page - 1) * page_size
     rows = connection.execute(
         select(credit_ledger_entries)
         .where(credit_ledger_entries.c.user_id == user_id_text)
-        .order_by(credit_ledger_entries.c.created_at.desc(), credit_ledger_entries.c.id)
+        .order_by(credit_ledger_entries.c.created_at.desc(), credit_ledger_entries.c.id.desc())
+        .limit(page_size)
+        .offset(offset)
     ).mappings().all()
-    return [dict(row) for row in rows]
+    return {
+        "items": [dict(row) for row in rows],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
+
+
+def release_reservation(
+    connection: Connection,
+    order_id: str,
+    requester_user_id: str | UUID,
+    idempotency_key: str | None = None,
+) -> dict[str, object]:
+    """Release reserved credits after an order is cancelled or expires."""
+    order_id_text = _required_text(order_id, "order_id")
+    requester_user_id_text = _required_text(requester_user_id, "requester_user_id")
+
+    reservation = connection.execute(
+        select(credit_reservations)
+        .where(credit_reservations.c.order_id == order_id_text)
+        .with_for_update()
+    ).mappings().one_or_none()
+    if reservation is None:
+        raise ReservationNotFoundError(
+            f"Credit reservation does not exist for order {order_id_text}."
+        )
+    if reservation["requester_user_id"] != requester_user_id_text:
+        raise ReservationStateError("Only the reservation requester can release credits.")
+    if reservation["status"] == "RELEASED":
+        return dict(reservation)
+    if reservation["status"] != "RESERVED":
+        raise ReservationStateError(
+            f"Cannot release a reservation with status {reservation['status']}."
+        )
+
+    account = connection.execute(
+        select(credit_accounts)
+        .where(credit_accounts.c.user_id == requester_user_id_text)
+        .with_for_update()
+    ).mappings().one_or_none()
+    if account is None:
+        raise UserError(f"Credit account does not exist for user {requester_user_id_text}.")
+
+    amount = reservation["amount"]
+    if account["reserved_balance"] < amount:
+        raise ReservationStateError("Reserved balance is lower than reservation amount.")
+
+    new_available_balance = account["available_balance"] + amount
+    new_reserved_balance = account["reserved_balance"] - amount
+    ledger_idempotency_key = idempotency_key or f"release:{order_id_text}"
+
+    connection.execute(
+        update(credit_accounts)
+        .where(credit_accounts.c.user_id == requester_user_id_text)
+        .values(
+            available_balance=new_available_balance,
+            reserved_balance=new_reserved_balance,
+        )
+    )
+    connection.execute(
+        update(credit_reservations)
+        .where(credit_reservations.c.order_id == order_id_text)
+        .values(
+            status="RELEASED",
+        )
+    )
+    connection.execute(
+        insert(credit_ledger_entries).values(
+            id=str(uuid4()),
+            user_id=requester_user_id_text,
+            order_id=order_id_text,
+            type="CREDIT_RELEASED",
+            amount=amount,
+            available_balance_after=new_available_balance,
+            reserved_balance_after=new_reserved_balance,
+            reservation_id=reservation["id"],
+            idempotency_key=ledger_idempotency_key,
+        )
+    )
+
+    return dict(
+        connection.execute(
+            select(credit_reservations).where(
+                credit_reservations.c.order_id == order_id_text
+            )
+        ).mappings().one()
+    )
+
+
+def transfer_reservation(
+    connection: Connection,
+    order_id: str,
+    requester_user_id: str | UUID,
+    courier_user_id: str | UUID,
+    idempotency_key: str | None = None,
+) -> dict[str, object]:
+    """Transfer reserved credits from requester to courier after completion."""
+    order_id_text = _required_text(order_id, "order_id")
+    requester_user_id_text = _required_text(requester_user_id, "requester_user_id")
+    courier_user_id_text = _required_text(courier_user_id, "courier_user_id")
+    if requester_user_id_text == courier_user_id_text:
+        raise ReservationStateError("Requester cannot receive credits as courier.")
+
+    reservation = connection.execute(
+        select(credit_reservations)
+        .where(credit_reservations.c.order_id == order_id_text)
+        .with_for_update()
+    ).mappings().one_or_none()
+    if reservation is None:
+        raise ReservationNotFoundError(
+            f"Credit reservation does not exist for order {order_id_text}."
+        )
+    if reservation["requester_user_id"] != requester_user_id_text:
+        raise ReservationStateError("Only the reservation requester can transfer credits.")
+    if reservation["status"] == "TRANSFERRED":
+        if reservation["courier_user_id"] == courier_user_id_text:
+            return dict(reservation)
+        raise ReservationStateError("Reservation was already transferred to another courier.")
+    if reservation["status"] != "RESERVED":
+        raise ReservationStateError(
+            f"Cannot transfer a reservation with status {reservation['status']}."
+        )
+
+    requester_account = connection.execute(
+        select(credit_accounts)
+        .where(credit_accounts.c.user_id == requester_user_id_text)
+        .with_for_update()
+    ).mappings().one_or_none()
+    if requester_account is None:
+        raise UserError(f"Credit account does not exist for user {requester_user_id_text}.")
+
+    ensure_account(connection, courier_user_id_text)
+    courier_account = connection.execute(
+        select(credit_accounts)
+        .where(credit_accounts.c.user_id == courier_user_id_text)
+        .with_for_update()
+    ).mappings().one_or_none()
+    if courier_account is None:
+        raise UserError(f"Credit account does not exist for user {courier_user_id_text}.")
+
+    amount = reservation["amount"]
+    if requester_account["reserved_balance"] < amount:
+        raise ReservationStateError("Requester reserved balance is lower than reservation amount.")
+
+    requester_reserved_after = requester_account["reserved_balance"] - amount
+    courier_available_after = courier_account["available_balance"] + amount
+    transfer_key = idempotency_key or f"transfer:{order_id_text}"
+
+    connection.execute(
+        update(credit_accounts)
+        .where(credit_accounts.c.user_id == requester_user_id_text)
+        .values(reserved_balance=requester_reserved_after)
+    )
+    connection.execute(
+        update(credit_accounts)
+        .where(credit_accounts.c.user_id == courier_user_id_text)
+        .values(available_balance=courier_available_after)
+    )
+    connection.execute(
+        update(credit_reservations)
+        .where(credit_reservations.c.order_id == order_id_text)
+        .values(
+            courier_user_id=courier_user_id_text,
+            status="TRANSFERRED",
+        )
+    )
+    connection.execute(
+        insert(credit_ledger_entries).values(
+            id=str(uuid4()),
+            user_id=requester_user_id_text,
+            order_id=order_id_text,
+            type="CREDIT_TRANSFERRED_OUT",
+            amount=-amount,
+            available_balance_after=requester_account["available_balance"],
+            reserved_balance_after=requester_reserved_after,
+            reservation_id=reservation["id"],
+            idempotency_key=f"{transfer_key}:out",
+        )
+    )
+    connection.execute(
+        insert(credit_ledger_entries).values(
+            id=str(uuid4()),
+            user_id=courier_user_id_text,
+            order_id=order_id_text,
+            type="CREDIT_TRANSFERRED_IN",
+            amount=amount,
+            available_balance_after=courier_available_after,
+            reserved_balance_after=courier_account["reserved_balance"],
+            reservation_id=reservation["id"],
+            idempotency_key=f"{transfer_key}:in",
+        )
+    )
+
+    return dict(
+        connection.execute(
+            select(credit_reservations).where(
+                credit_reservations.c.order_id == order_id_text
+            )
+        ).mappings().one()
+    )
