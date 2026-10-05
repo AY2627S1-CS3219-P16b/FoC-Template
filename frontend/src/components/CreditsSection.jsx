@@ -3,13 +3,20 @@ import React from 'react';
 export default function CreditsSection({
   availableCredits,
   reservedCredits,
-  transactions
+  transactions,
+  error
 }) {
   return (
     <section>
       <div className="section-header">
         <h2>Credit Ledger</h2>
       </div>
+
+      {error && (
+        <div className="action-error" role="alert">
+          {error}
+        </div>
+      )}
 
       <div className="stats-grid">
         <div className="stat-box">

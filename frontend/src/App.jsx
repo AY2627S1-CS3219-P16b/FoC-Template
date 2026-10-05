@@ -12,8 +12,15 @@ import SupplierAdminSection from "./components/SupplierAdminSection";
 import {
   initialSuppliers,
   initialOrders,
-  initialTransactions,
 } from "./data/mockData";
+import {
+  getCredits,
+  initializeCredits,
+  listCreditLedger,
+  releaseCredits,
+  reserveCredits,
+  transferCredits,
+} from "./api/credits";
 import {
   getUserProfile,
   loginUser,
@@ -568,6 +575,38 @@ export default function App() {
       .catch((error) => setProfileError(error.message));
   }, [accessToken, user.id]);
 
+  useEffect(() => {
+    if (!accessToken) return;
+
+    async function loadCredits() {
+      try {
+        const balance = await initializeCredits(accessToken);
+        const ledger = await listCreditLedger(accessToken);
+
+        setAvailableCredits(balance.available_balance);
+        setReservedCredits(balance.reserved_balance);
+        setTransactions(ledger.items.map(formatLedgerEntry));
+        setCreditError("");
+      } catch (error) {
+        setCreditError(error.message);
+      }
+    }
+
+    loadCredits();
+  }, [accessToken]);
+
+  function formatLedgerEntry(entry) {
+    return {
+      id: entry.id,
+      time: new Date(entry.created_at).toLocaleString(),
+      type: entry.type,
+      title: entry.type.replaceAll("_", " "),
+      orderRef: entry.order_id || "SYSTEM",
+      amount: entry.amount,
+      status: entry.type,
+    };
+  }
+
   const handleProfileUpdate = async (changes) => {
     const profile = await updateUserProfile(accessToken, user.id, changes);
     setUser(profileToUser(profile));
@@ -630,9 +669,10 @@ export default function App() {
   // Data States
   const [suppliers] = useState(initialSuppliers);
   const [orders, setOrders] = useState(initialOrders);
-  const [transactions, setTransactions] = useState(initialTransactions);
-  const [availableCredits, setAvailableCredits] = useState(20);
-  const [reservedCredits, setReservedCredits] = useState(1);
+  const [transactions, setTransactions] = useState([]);
+  const [availableCredits, setAvailableCredits] = useState(0);
+  const [reservedCredits, setReservedCredits] = useState(0);
+  const [creditError, setCreditError] = useState("");
 
   // Modal State
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(
@@ -660,9 +700,26 @@ export default function App() {
     setIsOrderModalOpen(true);
   };
 
+  const refreshCredits = async () => {
+    const [balance, ledger] = await Promise.all([
+      getCredits(accessToken),
+      listCreditLedger(accessToken),
+    ]);
+    setAvailableCredits(balance.available_balance);
+    setReservedCredits(balance.reserved_balance);
+    setTransactions(ledger.items.map(formatLedgerEntry));
+    setCreditError("");
+    return balance;
+  };
+
   // Requester: Submit New Errand Request
-  const handleCreateOrder = (newOrderData) => {
+  const handleCreateOrder = async (newOrderData) => {
     const newOrderId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+    const creditsReward = newOrderData.creditsReward || 1;
+
+    await reserveCredits(accessToken, newOrderId, creditsReward);
+    await refreshCredits();
+
     const newOrder = {
       id: newOrderId,
       ...newOrderData,
@@ -674,72 +731,44 @@ export default function App() {
       createdAt: "Just now",
     };
 
-    // Deduct available credit and hold in reserve
-    setAvailableCredits((prev) => prev - 1);
-    setReservedCredits((prev) => prev + 1);
-
-    // Record ledger transaction
-    const newTx = {
-      id: `TX-${Date.now()}`,
-      time: "Just now",
-      type: "CREDIT_RESERVED",
-      title: `Errand Request Created (${newOrderData.supplierName})`,
-      orderRef: `#${newOrderId}`,
-      amount: -1,
-      status: "HELD",
-    };
-
-    setOrders([newOrder, ...orders]);
-    setTransactions([newTx, ...transactions]);
+    setOrders((prev) => [newOrder, ...prev]);
     setActiveTab("my-requests");
   };
 
   // Requester: Cancel Order
-  const handleCancelOrder = (orderId) => {
+  const handleCancelOrder = async (orderId) => {
+    try {
+      await releaseCredits(accessToken, orderId);
+      await refreshCredits();
+    } catch (error) {
+      setCreditError(error.message);
+      return;
+    }
+
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: "CANCELLED" } : o)),
     );
-
-    // Release reserved credit back to available balance
-    setAvailableCredits((prev) => prev + 1);
-    setReservedCredits((prev) => Math.max(0, prev - 1));
-
-    // Record refund in transactions
-    setTransactions((prev) => [
-      {
-        id: `TX-${Date.now()}`,
-        time: "Just now",
-        type: "CREDIT_RELEASED",
-        title: "Order Cancelled by Requester",
-        orderRef: `#${orderId}`,
-        amount: 1,
-        status: "RELEASED",
-      },
-      ...prev,
-    ]);
   };
 
   // Requester: Confirm Delivery Receipt
-  const handleConfirmDelivery = (orderId) => {
+  const handleConfirmDelivery = async (orderId) => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order?.courierId) {
+      setCreditError("A courier must be assigned before credits can be transferred.");
+      return;
+    }
+
+    try {
+      await transferCredits(accessToken, orderId, order.courierId);
+      await refreshCredits();
+    } catch (error) {
+      setCreditError(error.message);
+      return;
+    }
+
     setOrders((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: "COMPLETED" } : o)),
     );
-
-    // Deduct reserved credit permanently
-    setReservedCredits((prev) => Math.max(0, prev - 1));
-
-    setTransactions((prev) => [
-      {
-        id: `TX-${Date.now()}`,
-        time: "Just now",
-        type: "CREDIT_TRANSFERRED",
-        title: "Delivery Confirmed & Credits Settled",
-        orderRef: `#${orderId}`,
-        amount: -1,
-        status: "COMPLETED",
-      },
-      ...prev,
-    ]);
   };
 
   // Courier: Accept Open Order
@@ -863,6 +892,12 @@ export default function App() {
 
       {/* Main Sections */}
       <main className="main-content">
+        {creditError && activeTab !== "credits" && (
+          <div className="action-error" role="alert">
+            {creditError}
+          </div>
+        )}
+
         {/* REQUESTER FLOWS */}
         {role === "REQUESTER" && activeTab === "suppliers" && (
           <SuppliersSection
@@ -905,6 +940,7 @@ export default function App() {
             availableCredits={availableCredits}
             reservedCredits={reservedCredits}
             transactions={transactions}
+            error={creditError}
           />
         )}
 

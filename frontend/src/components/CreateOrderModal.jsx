@@ -13,6 +13,7 @@ export default function CreateOrderModal({
   const [instructions, setInstructions] = useState('');
   const [deadline, setDeadline] = useState('Within 45 mins');
   const [errorMsg, setErrorMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen || !supplier) return null;
 
@@ -22,8 +23,9 @@ export default function CreateOrderModal({
     : supplier.location;
   const pickupNotes = supplier.pickup_instructions ?? supplier.pickupNotes;
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
     if (!items.trim() || !deliveryLocation.trim()) {
       setErrorMsg('Please fill in required fields.');
       return;
@@ -35,21 +37,28 @@ export default function CreateOrderModal({
     }
 
     setErrorMsg('');
-    onSubmitOrder({
-      supplierId: supplier.id,
-      supplierName: supplier.name,
-      pickupLocation,
-      items: items.trim(),
-      deliveryLocation: deliveryLocation.trim(),
-      instructions: instructions.trim() || 'None',
-      deadline,
-      creditsReward: 1
-    });
+    setSubmitting(true);
+    try {
+      await onSubmitOrder({
+        supplierId: supplier.id,
+        supplierName: supplier.name,
+        pickupLocation,
+        items: items.trim(),
+        deliveryLocation: deliveryLocation.trim(),
+        instructions: instructions.trim() || 'None',
+        deadline,
+        creditsReward: 1
+      });
 
-    setItems('');
-    setDeliveryLocation('');
-    setInstructions('');
-    onClose();
+      setItems('');
+      setDeliveryLocation('');
+      setInstructions('');
+      onClose();
+    } catch (error) {
+      setErrorMsg(error.message || 'Could not create this request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -124,10 +133,10 @@ export default function CreateOrderModal({
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
-            <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>
-              Submit Request
+            <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={submitting}>
+              {submitting ? 'Submitting...' : 'Submit Request'}
             </button>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
               Cancel
             </button>
           </div>
