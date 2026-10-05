@@ -7,8 +7,10 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 
-NUS_EMAIL_PATTERN = re.compile(r"^[A-Za-z0-9]+@u\.nus\.edu$", re.IGNORECASE)
-
+NUS_EMAIL_PATTERN = re.compile(
+    r"^[A-Za-z0-9._]+@u\.nus\.edu$",
+    re.IGNORECASE
+)
 
 class RegistrationRequest(BaseModel):
     email: str
