@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, status
 from sqlalchemy import text
 
 from .auth import CurrentUser, current_user, load_jwt_public_key
@@ -18,7 +18,6 @@ from .api_schemas import (
 from .credit_queries import (
     UserError,
     InsufficientCredits,
-    NoChangeError,
     DuplicateReservationError,
     ReservationNotFoundError,
     ReservationStateError,
@@ -129,17 +128,18 @@ def create_app() -> FastAPI:
     )
     def release_credits(
         order_id: str,
-        body: ReleaseCreditsRequest,
         request: Request,
+        body: ReleaseCreditsRequest | None = Body(default=None),
         caller: CurrentUser = Depends(current_user),
     ):
+        release_request = body or ReleaseCreditsRequest()
         with request.app.state.database.begin() as connection:
             try:
                 return release_reservation(
                     connection,
                     order_id=order_id,
                     requester_user_id=caller.id,
-                    idempotency_key=body.idempotency_key,
+                    idempotency_key=release_request.idempotency_key,
                 )
             except ReservationNotFoundError as error:
                 raise HTTPException(
