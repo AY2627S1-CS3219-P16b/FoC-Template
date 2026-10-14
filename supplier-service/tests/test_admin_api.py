@@ -38,6 +38,7 @@ def supplier_row(**overrides):
         "latitude": None, "longitude": None,
         # Not null: the columns are required, so no row can come back without them.
         "opening_time": time(8, 0), "closing_time": time(18, 0),
+        "operating_days": ["MON", "TUE", "WED", "THU", "FRI"],
         "image_url": None, "pickup_instructions": None,
         "is_active": True, "place_id": uuid4(), "place_name": "COM2",
         "place_parent_id": None, "place_parent_name": None, **overrides,
@@ -68,7 +69,8 @@ class AdminEndpointTests(unittest.TestCase):
         self.supplier_id = str(uuid4())
         self.body = {"name": "Test Cafe", "supplier_type": "FOOD_BEVERAGE",
                      "place_id": self.place_id,
-                     "opening_time": "08:00", "closing_time": "18:00"}
+                     "opening_time": "08:00", "closing_time": "18:00",
+                     "operating_days": ["MON", "TUE", "WED", "THU", "FRI"]}
         # Creating a record needs no reason; changing or hiding one does.
         self.creates = [
             ("post", "/api/v1/suppliers", self.body),
@@ -190,6 +192,13 @@ class AdminEndpointTests(unittest.TestCase):
                                            if k != "opening_time"}),
             ("post", "/api/v1/suppliers", {**self.body, "closing_time": "25:00"}),
             ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"opening_time": None}),
+            # Operating days are required too, and must be real weekdays.
+            ("post", "/api/v1/suppliers", {k: v for k, v in self.body.items()
+                                           if k != "operating_days"}),
+            ("post", "/api/v1/suppliers", {**self.body, "operating_days": []}),
+            ("post", "/api/v1/suppliers", {**self.body, "operating_days": ["FUNDAY"]}),
+            ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"operating_days": None}),
+            ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"operating_days": []}),
             # Required columns cannot be blanked, and a no-op is not a change.
             ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"name": None}),
             ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"is_active": None}),
@@ -207,6 +216,20 @@ class AdminEndpointTests(unittest.TestCase):
             self.call("post", "/api/v1/suppliers",
                       {**self.body, "tags": ["Coffee", " COFFEE ", "Halal"]}, **REASON)
         self.assertEqual(create.call_args.kwargs["values"]["tags"], ["coffee", "halal"])
+
+    def test_operating_days_are_normalized_before_storage(self):
+        row = supplier_row()
+        with patch("app.main.create_supplier", return_value=row) as create:
+            self.call("post", "/api/v1/suppliers",
+                      {**self.body, "operating_days": ["fri", "MON", " wed ", "MON"]})
+        self.assertEqual(create.call_args.kwargs["values"]["operating_days"],
+                         ["MON", "WED", "FRI"])
+
+    def test_response_reports_days_and_whether_open_now(self):
+        with patch("app.main.create_supplier", return_value=supplier_row()):
+            body = self.call("post", "/api/v1/suppliers", self.body).json()
+        self.assertEqual(body["operating_days"], ["MON", "TUE", "WED", "THU", "FRI"])
+        self.assertIsInstance(body["is_open_now"], bool)
 
     def test_update_sends_only_the_supplied_fields(self):
         row = supplier_row(name="Renamed")

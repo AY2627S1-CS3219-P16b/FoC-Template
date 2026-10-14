@@ -1,12 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  DAY_PRESETS,
   SUPPLIER_CATEGORIES,
+  WEEK_DAYS,
   createPlace,
   createSupplier,
   deactivateSupplier,
   fetchPlaces,
   fetchSupplierAuditLogs,
   fetchSuppliers,
+  formatDays,
   formatPlace,
   updateSupplier,
 } from "../api/suppliers";
@@ -26,6 +29,8 @@ const blankSupplier = {
   longitude: "",
   opening_time: "",
   closing_time: "",
+  // Starts empty so the admin chooses the days rather than accepting a guess.
+  operating_days: [],
   image_url: "",
   pickup_instructions: "",
 };
@@ -44,12 +49,16 @@ function supplierForm(supplier) {
     longitude: supplier.longitude ?? "",
     opening_time: (supplier.opening_time || "").slice(0, 5),
     closing_time: (supplier.closing_time || "").slice(0, 5),
+    operating_days: supplier.operating_days || [],
     image_url: supplier.image_url || "",
     pickup_instructions: supplier.pickup_instructions || "",
   };
 }
 
 const splitTags = (value) => value.split(",").map((tag) => tag.trim()).filter(Boolean);
+
+/** Selected days in week order, so the same choice always compares equal. */
+const orderedDays = (days) => WEEK_DAYS.map(({ value }) => value).filter((day) => days.includes(day));
 
 /** Mirrors the database's uniqueness key: lower(regexp_replace(name, …)). */
 const nameKey = (value) => (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -65,6 +74,7 @@ const AUDIT_LABELS = {
   location_description: "Direction",
   opening_time: "Opens",
   closing_time: "Closes",
+  operating_days: "Open on",
   image_url: "Image URL",
   pickup_instructions: "Pickup instructions",
   is_active: "Shown in browsing",
@@ -113,9 +123,11 @@ function missingForSupplier({ form, reason, isNew, hasChanges }) {
       !form.name.trim() && "a name",
       !form.place_id && "a location",
       !(form.opening_time && form.closing_time) && "opening and closing times",
+      !form.operating_days.length && "the days it opens",
     ].filter(Boolean);
     return missing.length ? `Enter ${missing.join(", ")}.` : "";
   }
+  if (!form.operating_days.length) return "Select at least one day it opens.";
   // The reason gates Save and Hide alike, so say so: a disabled Hide button
   // with a message about saving explains the wrong control.
   if (!reason.trim()) return "Give a reason below to save or hide this supplier.";
@@ -138,6 +150,7 @@ function toPayload(form) {
     longitude: numberOrNull(form.longitude),
     opening_time: blankToNull(form.opening_time),
     closing_time: blankToNull(form.closing_time),
+    operating_days: orderedDays(form.operating_days),
     image_url: blankToNull(form.image_url),
     pickup_instructions: blankToNull(form.pickup_instructions),
   };
@@ -227,7 +240,7 @@ export default function SupplierAdminSection({ token }) {
   const changes = selected ? changedFields(form, selected) : {};
   const hasChanges = isNew
     ? Boolean(form.name.trim() && form.place_id
-      && form.opening_time && form.closing_time)
+      && form.opening_time && form.closing_time && form.operating_days.length)
     : Object.keys(changes).length > 0;
   // The combination the unique index refuses, caught before the save so the
   // admin sees the cause rather than a 409. Must match the index expression:
@@ -253,6 +266,7 @@ export default function SupplierAdminSection({ token }) {
       return value ? names.get(value) || "a location no longer listed" : "none";
     }
     if (value === null || value === undefined || value === "") return "not set";
+    if (field === "operating_days") return formatDays(value) || "none";
     if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
     if (typeof value === "boolean") return value ? "yes" : "no";
     if (field === "supplier_type") return CATEGORY_LABELS[value] || value;
@@ -330,6 +344,13 @@ export default function SupplierAdminSection({ token }) {
       setPlaceParent("");
     }, "Location created.");
   };
+
+  const toggleDay = (day) => setForm((current) => ({
+    ...current,
+    operating_days: current.operating_days.includes(day)
+      ? current.operating_days.filter((selectedDay) => selectedDay !== day)
+      : orderedDays([...current.operating_days, day]),
+  }));
 
   const field = (label, name, type = "text", wide = false, required = false, extra = {}) => (
     <div className={`form-group${wide ? " field-wide" : ""}`} key={name}>
@@ -500,6 +521,46 @@ export default function SupplierAdminSection({ token }) {
                 { min: -180, max: 180, step: "any", placeholder: "e.g. 103.7764" })}
               {field("Opens", "opening_time", "time", false, true)}
               {field("Closes", "closing_time", "time", false, true)}
+              <div className="form-group field-wide">
+                <span className="form-label" id="supplier-days-label">
+                  Open on<Required />
+                </span>
+                <div className="day-picker" role="group" aria-labelledby="supplier-days-label">
+                  {WEEK_DAYS.map(({ value, label }) => {
+                    const on = form.operating_days.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`btn btn-sm ${on ? "btn-primary" : "btn-secondary"}`}
+                        aria-pressed={on}
+                        disabled={busy}
+                        onClick={() => toggleDay(value)}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="day-presets">
+                  <small>Quick pick:</small>
+                  {DAY_PRESETS.map(({ label, days }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={busy}
+                      onClick={() => setForm((c) => ({ ...c, operating_days: days }))}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <small>
+                  The opening and closing times apply to every selected day. A closing
+                  time before the opening time runs past midnight.
+                </small>
+              </div>
               {field("Image URL", "image_url", "text", true)}
               {field("Pickup instructions", "pickup_instructions", "text", true)}
             </div>

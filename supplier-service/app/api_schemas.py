@@ -6,6 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .classification import normalize_tags, validate_supplier_type
+from .hours import is_open, normalize_days
 
 
 class PlaceSummary(BaseModel):
@@ -41,6 +42,10 @@ class SupplierResponse(BaseModel):
     longitude: float | None = None
     opening_time: time
     closing_time: time
+    operating_days: list[str]
+    # Computed in campus time when the response is built. Order Service should
+    # check this before accepting an order rather than repeating the rule.
+    is_open_now: bool
     image_url: str | None = None
     pickup_instructions: str | None = None
     is_active: bool
@@ -55,6 +60,8 @@ class SupplierResponse(BaseModel):
                 parent_id=row["place_parent_id"],
                 parent_name=row["place_parent_name"],
             ),
+            is_open_now=is_open(row["opening_time"], row["closing_time"],
+                                row["operating_days"]),
             **{key: value for key, value in row.items() if not key.startswith("place_")},
         )
 
@@ -82,6 +89,8 @@ class SupplierCreate(BaseModel):
     # before the opening time means trading past midnight.
     opening_time: time
     closing_time: time
+    # Required, like the hours: e.g. ["MON", "TUE", "WED", "THU", "FRI"].
+    operating_days: list[str]
     floor: str | None = Field(default=None, max_length=30)
     location_description: str | None = None
     latitude: float | None = Field(default=None, ge=-90, le=90)
@@ -124,6 +133,11 @@ class SupplierCreate(BaseModel):
     def clean_tags(cls, value: list[str]) -> list[str]:
         return normalize_tags(value)
 
+    @field_validator("operating_days")
+    @classmethod
+    def known_days(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else normalize_days(value)
+
 
 class SupplierUpdate(SupplierCreate):
     """Fields to change. Anything omitted is left alone.
@@ -138,6 +152,7 @@ class SupplierUpdate(SupplierCreate):
     tags: list[str] | None = None
     opening_time: time | None = None
     closing_time: time | None = None
+    operating_days: list[str] | None = None
     is_active: bool | None = None
 
     @field_validator("supplier_type")
@@ -153,7 +168,7 @@ class SupplierUpdate(SupplierCreate):
     @model_validator(mode="after")
     def required_fields_keep_a_value(self) -> "SupplierUpdate":
         required = ("name", "supplier_type", "place_id", "tags", "is_active",
-                    "opening_time", "closing_time")
+                    "opening_time", "closing_time", "operating_days")
         cleared = [
             field for field in required
             if field in self.model_fields_set and getattr(self, field) is None

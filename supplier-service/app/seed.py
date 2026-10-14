@@ -14,13 +14,14 @@ from sqlalchemy.dialects.postgresql import insert
 from .database import create_database_engine
 from .places import canonical_place_records, normalize_place_name
 from .classification import normalize_tags, validate_supplier_type
-from .schema import places, metadata, suppliers
+from .hours import parse_days
+from .schema import create_schema, places, suppliers
 
 
 DEFAULT_CSV = Path(__file__).resolve().parents[2] / "data/csv/supplier-seed-data.csv"
 CSV_COLUMNS = {
     "Name", "Type", "Tags", "Building", "Floor", "Location Description", "Latitude",
-    "Longitude", "StartingTime", "ClosingTime", "ImageURL",
+    "Longitude", "StartingTime", "ClosingTime", "ImageURL", "OperatingDays",
 }
 
 
@@ -35,7 +36,7 @@ def read_suppliers(path: Path) -> list[dict]:
     for line_number, row in enumerate(reader, start=2):
         try:
             values = {key: (row.get(key) or "").strip() for key in CSV_COLUMNS}
-            for required in ("Name", "Type", "Building"):
+            for required in ("Name", "Type", "Building", "OperatingDays"):
                 if not values[required]:
                     raise ValueError(f"{required} must not be empty")
 
@@ -66,6 +67,7 @@ def read_suppliers(path: Path) -> list[dict]:
                 "longitude": float(values["Longitude"]) if values["Longitude"] else None,
                 "opening_time": parse_time(values["StartingTime"]),
                 "closing_time": parse_time(values["ClosingTime"]),
+                "operating_days": parse_days(values["OperatingDays"]),
                 "image_url": values["ImageURL"] or None,
             }
             for field, limit in (("latitude", 90), ("longitude", 180)):
@@ -112,7 +114,7 @@ def seed_records(connection, records: list[dict]) -> tuple[int, int]:
 
 def seed(engine, records: list[dict]) -> tuple[int, int]:
     with engine.begin() as connection:
-        metadata.create_all(connection)
+        create_schema(connection)
         inserted, total = seed_records(connection, records)
     return inserted, total
 

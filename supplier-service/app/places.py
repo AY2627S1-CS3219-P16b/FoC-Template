@@ -12,17 +12,14 @@ CANONICAL_PLACES = (
     ('COM3', None),
     ('Central Library', None),
     ('Engineering Block E3', None),
-    ('Engineering Block E4', None),
     ('Engineering Block EA', None),
     ('LT27', None),
     ('Hon Sui Sen Memorial Library', None),
     ('Medicine+Science Library', None),
     ("Prince George's Park", None),
-    ('The Ridge', None),
+    ('UTown', None),
     ('Yusof Ishak House', None),
-    ('innovation4.0', None),
-    ('Frontier', 'LT27'),
-    ('The Terrace', 'COM3'),
+    ('Central Square', 'Yusof Ishak House'),
 )
 
 

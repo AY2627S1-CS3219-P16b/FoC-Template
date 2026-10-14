@@ -25,6 +25,7 @@ Paths below are relative to `supplier-service/` unless stated otherwise.
 | `app/places.py`           | Initial hierarchy, name normalization, seed place IDs    |
 | `app/auth.py`             | Verify callers through User Service                      |
 | `app/classification.py`   | Allowed categories and tag normalization/validation      |
+| `app/hours.py`            | Operating days and the "is it open now?" rule            |
 | `app/seed.py`             | Validate and import the initial CSV                      |
 | `tests/`                  | Seed, storage, authentication, and admin-endpoint checks |
 
@@ -122,8 +123,8 @@ can sit inside another, and every admin write is recorded in an audit table.
         │  places                  │
    ┌───▶│    id                    │   parent_id lets a place
    │    │    parent_id ────────────┼─┐ nest inside another:
-   │    │    name                  │ │ The Terrace → COM3
-   │    │    search_key            │ │ Frontier    → LT27
+   │    │    name                  │ │ Central Square →
+   │    │    search_key            │ │   Yusof Ishak House
    │    └──────────────────────────┘ │
    │                 ▲               │
    └─────────────────┼───────────────┘
@@ -144,9 +145,9 @@ can sit inside another, and every admin write is recorded in an audit table.
 | `search_key`               | text        | unique; normalized `name`, used for matching |
 | `created_at`, `updated_at` | timestamptz |                                              |
 
-`id` is the primary key. `parent_id` nests a place inside another — Frontier's
-`parent_id` points at LT27 — so a supplier's location can be a whole building
-or a specific venue inside one. A place that suppliers or child places
+`id` is the primary key. `parent_id` nests a place inside another — Central
+Square's `parent_id` points at Yusof Ishak House — so a supplier's location can
+be a whole building or a specific venue inside one. A place that suppliers or child places
 reference cannot be deleted.
 
 **`suppliers`**
@@ -162,6 +163,7 @@ reference cannot be deleted.
 | `location_description`             | text        | directions within the place                             |
 | `latitude`, `longitude`            | float       | per supplier, not per place                             |
 | `opening_time`, `closing_time`     | time        | required; see Opening hours                             |
+| `operating_days`                   | varchar(3)[] | required, at least one of `MON`…`SUN`, in week order    |
 | `image_url`, `pickup_instructions` | text        | optional                                                |
 | `is_active`                        | bool        | soft delete                                             |
 | `created_at`, `updated_at`         | timestamptz |                                                         |
@@ -204,28 +206,46 @@ venue inside one.
 - **`name`** is the display name, e.g. `COM2` or `Prince George's Park`. It is
   the one spelling used everywhere, so the same building is never split across
   variants like `Com 2` and `Com2`.
-- **`parent_id`** nests a place inside another. Frontier is inside LT27; The
-  Terrace is inside COM3. A supplier points at its most specific place, and
+- **`parent_id`** nests a place inside another. The Central Square food court
+  is inside Yusof Ishak House. A supplier points at its most specific place, and
   filtering by a parent also returns suppliers in its children — so a user can
-  filter by either the building or the canteen.
+  filter by either the building or the food court.
+- **A food court or canteen is a place; each stall in it is a supplier.** Wok
+  Express is a supplier at Central Square, not a supplier called "Central
+  Square". A standalone shop sits directly in its building.
 - **`search_key`** is `name` with case, spaces, and punctuation removed
   (`COM 2` → `com2`). Incoming text is matched against it, so a typed variant
   resolves to the existing place rather than creating a near-duplicate.
 
 ## Opening hours
 
-Both times are required, so a caller never has to treat unknown hours as a
-special case: Order Service can refuse an order placed while a supplier is
-shut.
+A supplier has **one daily time range** and **the weekdays it applies to**,
+because that is how campus canteens and shops publish their hours. All three
+are required, so a caller never has to treat unknown hours as a special case:
+Order Service can refuse an order placed while a supplier is shut.
 
-- **Open around the clock** is stored as `00:00` to `23:59`. Five suppliers use
-  this, including the COM2 printer.
+- **Open around the clock** is stored as `00:00` to `23:59`, e.g. InstaChef and
+  Octobox, every day.
 - **Trading past midnight** is stored with a closing time _earlier_ than the
-  opening time, as Supersnacks does with `11:00` to `02:00`.
+  opening time, as Supersnacks does with `18:00` to `02:00`.
+- **Operating days** are stored as codes in week order, e.g.
+  `{MON,TUE,WED,THU,FRI}`.
 
-The second point matters for querying. "Is it open now?" is not a plain range
-comparison: when `closing_time < opening_time` the window wraps, so the test is
-`now >= opening OR now <= closing` rather than `opening <= now <= closing`.
+"Is it open now?" is answered by `is_open()` in `app/hours.py`, in Singapore
+time, and returned on every supplier as `is_open_now`. Order Service should use
+that field rather than repeat the rule. It is not a plain range comparison:
+
+- When `closing_time < opening_time` the window wraps past midnight.
+- The after-midnight part belongs to **the day the shift started**. Supersnacks
+  at 01:00 on Saturday is open if Friday is an operating day, whether or not
+  Saturday is.
+
+**Known limitation:** different hours on different days cannot be expressed.
+Central Square's stalls close at 14:30 on Saturdays, so they are stored as
+Monday to Friday only — showing a stall as open when it is shut is worse than
+missing its Saturday hours. Anna's x Soup Union is stored as Monday to Saturday
+08:30–18:00 although it closes at 17:00 on Saturdays. If more suppliers need
+per-day hours, replace the single range with a row per day.
 
 ## Categories and tags
 
@@ -247,7 +267,7 @@ added without a schema change.
 Tags exist because a category alone cannot express something like coffee.
 Coffee shops _are_ food and beverage, so making `COFFEE` a fourth category
 would drop them out of a food search. As a tag, both work: `FOOD_BEVERAGE`
-returns all 16 food suppliers, `coffee` narrows to the 5 that serve it.
+returns all 21 food suppliers, `coffee` narrows to the 6 that serve it.
 
 In the CSV, `Type` holds the category and `Tags` is a semicolon-separated list
 (`coffee;halal`); blank means none. Tags are stored lowercase, so `Coffee` and
@@ -267,6 +287,11 @@ Changes from the supplied file:
   building no longer appears as both `Com 2` and `Com2`.
 - Image URLs point at `raw.githubusercontent.com` rather than the `github.com`
   `/blob/` links supplied, which return an HTML page rather than an image.
+- An `OperatingDays` column was added. It accepts `DAILY`, `WEEKDAYS`, a range
+  such as `MON-FRI`, or a list such as `MON,WED,FRI`, and is required.
+- Rows were checked against each supplier's real hours. Entries we could not
+  verify were removed, food courts became places with their stalls as
+  suppliers, and branches at UTown and elsewhere were added.
 - The file is saved as UTF-8.
 
 The importer validates every row and fails with the row number rather than
@@ -275,8 +300,13 @@ importing partial data.
 ## Database maintenance
 
 PostgreSQL data persists in the Docker volume `supplier-db-data` across service
-and container restarts. `create_all()` creates missing tables only; changes to
-an existing table's structure require a database migration.
+and container restarts. `create_all()` creates missing tables only, so
+`create_schema()` in `app/schema.py` also adds columns introduced later: a
+database created before `operating_days` existed gains the column on startup,
+with existing suppliers marked open every day.
+
+Seeding only inserts suppliers that are not already present, so after the seed
+CSV changes, reset the database as below to see the new list.
 
 To reset local seed data, stop Supplier Service and recreate its database from
 the repository root:

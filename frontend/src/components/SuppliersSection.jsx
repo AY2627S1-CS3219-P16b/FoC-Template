@@ -227,11 +227,18 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
                 </div>
                 <div className="supplier-info">
                   <strong>Location:</strong> {formatPlace(supplier.place)}
-                  {supplier.floor ? `, level ${supplier.floor}` : ''}
+                  {supplier.floor ? `, Level ${supplier.floor}` : ''}
                 </div>
                 {formatHours(supplier) ? (
                   <div className="supplier-info">
                     <strong>Hours:</strong> {formatHours(supplier)}
+                    {/* Worked out by Supplier Service in campus time, the same
+                        answer Order Service uses to accept or refuse an order. */}
+                    {typeof supplier.is_open_now === 'boolean' ? (
+                      <span className={`supplier-status ${supplier.is_open_now ? 'supplier-status-open' : 'supplier-status-closed'}`}>
+                        {supplier.is_open_now ? 'Open now' : 'Closed'}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="supplier-card-actions">

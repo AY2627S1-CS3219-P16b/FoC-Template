@@ -19,7 +19,7 @@ export default function CreateOrderModal({
 
   // Live suppliers carry a nested place; mock order data used a flat string.
   const pickupLocation = supplier.place
-    ? `${formatPlace(supplier.place)}${supplier.floor ? `, level ${supplier.floor}` : ''}`
+    ? `${formatPlace(supplier.place)}${supplier.floor ? `, Level ${supplier.floor}` : ''}`
     : supplier.location;
   const pickupNotes = supplier.pickup_instructions ?? supplier.pickupNotes;
 

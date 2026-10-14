@@ -196,8 +196,49 @@ export function formatPlace(place) {
   return place.parent_name ? `${place.name} (${place.parent_name})` : place.name;
 }
 
+// The service's day codes, in week order, with how each is shown.
+export const WEEK_DAYS = [
+  { value: "MON", label: "Mon" },
+  { value: "TUE", label: "Tue" },
+  { value: "WED", label: "Wed" },
+  { value: "THU", label: "Thu" },
+  { value: "FRI", label: "Fri" },
+  { value: "SAT", label: "Sat" },
+  { value: "SUN", label: "Sun" },
+];
+
+export const DAY_PRESETS = [
+  { label: "Weekdays", days: ["MON", "TUE", "WED", "THU", "FRI"] },
+  { label: "Daily", days: WEEK_DAYS.map(({ value }) => value) },
+];
+
 /**
- * Stored times as "09:30 - 19:30".
+ * Operating days as "Daily", "Mon–Fri", or "Mon, Wed, Fri".
+ *
+ * Consecutive days collapse into a range so a typical canteen reads at a
+ * glance; anything irregular is listed so no day is implied that is not stored.
+ */
+export function formatDays(days) {
+  const selected = new Set(days || []);
+  const indexes = WEEK_DAYS.map(({ value }, index) => (selected.has(value) ? index : -1))
+    .filter((index) => index >= 0);
+  if (indexes.length === 0) return "";
+  if (indexes.length === WEEK_DAYS.length) return "Daily";
+  const runs = [];
+  for (const index of indexes) {
+    const last = runs[runs.length - 1];
+    if (last && index === last[1] + 1) last[1] = index;
+    else runs.push([index, index]);
+  }
+  return runs.map(([start, end]) => {
+    if (end - start >= 2) return `${WEEK_DAYS[start].label}–${WEEK_DAYS[end].label}`;
+    if (end > start) return `${WEEK_DAYS[start].label}, ${WEEK_DAYS[end].label}`;
+    return WEEK_DAYS[start].label;
+  }).join(", ");
+}
+
+/**
+ * Stored days and times as "Mon–Fri · 09:30 – 19:30".
  *
  * 00:00 to 23:59 is how a supplier that never closes is stored, so it reads as
  * "Open 24 hours" rather than as a range covering all but one minute.
@@ -207,6 +248,9 @@ export function formatHours(supplier) {
   const opening = trim(supplier.opening_time);
   const closing = trim(supplier.closing_time);
   if (!opening || !closing) return "";
-  if (opening === "00:00" && closing === "23:59") return "Open 24 hours";
-  return `${opening} - ${closing}`;
+  const times = opening === "00:00" && closing === "23:59"
+    ? "Open 24 hours"
+    : `${opening} – ${closing}`;
+  const days = formatDays(supplier.operating_days);
+  return days ? `${days} · ${times}` : times;
 }

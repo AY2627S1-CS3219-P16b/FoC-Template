@@ -34,6 +34,7 @@ _SUPPLIER_COLUMNS = (
     suppliers.c.longitude,
     suppliers.c.opening_time,
     suppliers.c.closing_time,
+    suppliers.c.operating_days,
     suppliers.c.image_url,
     suppliers.c.pickup_instructions,
     suppliers.c.is_active,

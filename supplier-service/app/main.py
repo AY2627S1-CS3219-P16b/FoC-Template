@@ -29,7 +29,7 @@ from .api_schemas import (
 from .auth import CurrentUser, admin_reason, current_user, load_jwt_public_key, require_admin
 from .classification import SUPPLIER_TYPES
 from .database import create_database_engine
-from .schema import metadata
+from .schema import create_schema
 from .supplier_queries import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_SORT,
@@ -52,8 +52,9 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         try:
-            # Creates missing tables; existing supplier records are preserved.
-            metadata.create_all(engine)
+            # Creates missing tables and columns; existing supplier records are preserved.
+            with engine.begin() as connection:
+                create_schema(connection)
             # Open a real connection at startup to verify PostgreSQL is available.
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
