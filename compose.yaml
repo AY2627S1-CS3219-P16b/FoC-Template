@@ -84,6 +84,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://supplier:supplier_local_dev@supplier-db:5432/supplier_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
+      SUPPLIER_IMAGE_DIR: /data/supplier-images
     volumes:
       - type: bind
         source: ./user-service/keys/jwt-public.pem
@@ -92,6 +93,8 @@ services:
         bind:
           create_host_path: false
       - ./data/csv:/data/csv:ro
+      # Admin-uploaded photos; a named volume so they survive rebuilds.
+      - supplier-images:/data/supplier-images
     ports:
       - "127.0.0.1:8001:8001"
     depends_on:
@@ -148,4 +151,5 @@ services:
 volumes:
   user-db-data:
   supplier-db-data:
+  supplier-images:
   credit-db-data:

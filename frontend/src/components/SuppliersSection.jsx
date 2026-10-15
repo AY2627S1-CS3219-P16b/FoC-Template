@@ -8,11 +8,37 @@ import {
   fetchSuppliers,
   formatHours,
   formatPlace,
+  supplierImageSrc,
 } from '../api/suppliers';
 import PlaceTreeSelect from './PlaceTreeSelect';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
+
+/** "Wok Express" → "WE", so a card without a photo still has a visual anchor. */
+const initials = (name) => name.split(/\s+/).filter((word) => /[A-Za-z0-9]/.test(word))
+  .slice(0, 2).map((word) => word.match(/[A-Za-z0-9]/)[0].toUpperCase()).join('');
+
+/**
+ * The supplier's photo, or a tile with its initials when there is none or it
+ * fails to load, so every card in the grid keeps the same shape.
+ */
+function SupplierImage({ supplier }) {
+  const [failed, setFailed] = useState(false);
+  const src = supplierImageSrc(supplier.image_url);
+  if (!src || failed) {
+    return (
+      <div className={`supplier-image supplier-image-placeholder category-${supplier.supplier_type}`}
+           aria-hidden="true">
+        {initials(supplier.name)}
+      </div>
+    );
+  }
+  return (
+    <img className="supplier-image" src={src} alt={supplier.name}
+         loading="lazy" decoding="async" onError={() => setFailed(true)} />
+  );
+}
 
 /** Current filters from the address bar, so a shared or refreshed link restores them. */
 const urlParam = (key, fallback = '') =>
@@ -215,6 +241,7 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
           <div className="grid-suppliers">
             {suppliers.map((supplier) => (
               <div key={supplier.id} className="card supplier-card">
+                <SupplierImage key={supplier.image_url} supplier={supplier} />
                 <div className="supplier-card-header">
                   <div className="supplier-name">{supplier.name}</div>
                   {supplier.tags.length > 0 ? (
@@ -227,11 +254,18 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
                 </div>
                 <div className="supplier-info">
                   <strong>Location:</strong> {formatPlace(supplier.place)}
-                  {supplier.floor ? `, level ${supplier.floor}` : ''}
+                  {supplier.floor ? `, Level ${supplier.floor}` : ''}
                 </div>
                 {formatHours(supplier) ? (
                   <div className="supplier-info">
                     <strong>Hours:</strong> {formatHours(supplier)}
+                    {/* Worked out by Supplier Service in campus time, the same
+                        answer Order Service uses to accept or refuse an order. */}
+                    {typeof supplier.is_open_now === 'boolean' ? (
+                      <span className={`supplier-status ${supplier.is_open_now ? 'supplier-status-open' : 'supplier-status-closed'}`}>
+                        {supplier.is_open_now ? 'Open now' : 'Closed'}
+                      </span>
+                    ) : null}
                   </div>
                 ) : null}
                 <div className="supplier-card-actions">

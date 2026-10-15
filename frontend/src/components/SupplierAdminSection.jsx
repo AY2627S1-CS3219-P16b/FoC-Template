@@ -1,19 +1,27 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  DAY_PRESETS,
   SUPPLIER_CATEGORIES,
+  WEEK_DAYS,
   createPlace,
   createSupplier,
   deactivateSupplier,
   fetchPlaces,
   fetchSupplierAuditLogs,
   fetchSuppliers,
+  formatDays,
   formatPlace,
+  supplierImageSrc,
   updateSupplier,
+  uploadSupplierImage,
 } from "../api/suppliers";
+import PhotoCropper from "./PhotoCropper";
 import PlaceTreeSelect from "./PlaceTreeSelect";
 
 const AUDIT_PAGE_SIZE = 10;
 const LIST_PAGE_SIZE = 100;
+// Mirrors the service's limit so an oversized file is refused before uploading.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const blankSupplier = {
   name: "",
@@ -26,6 +34,8 @@ const blankSupplier = {
   longitude: "",
   opening_time: "",
   closing_time: "",
+  // Starts empty so the admin chooses the days rather than accepting a guess.
+  operating_days: [],
   image_url: "",
   pickup_instructions: "",
 };
@@ -44,12 +54,16 @@ function supplierForm(supplier) {
     longitude: supplier.longitude ?? "",
     opening_time: (supplier.opening_time || "").slice(0, 5),
     closing_time: (supplier.closing_time || "").slice(0, 5),
+    operating_days: supplier.operating_days || [],
     image_url: supplier.image_url || "",
     pickup_instructions: supplier.pickup_instructions || "",
   };
 }
 
 const splitTags = (value) => value.split(",").map((tag) => tag.trim()).filter(Boolean);
+
+/** Selected days in week order, so the same choice always compares equal. */
+const orderedDays = (days) => WEEK_DAYS.map(({ value }) => value).filter((day) => days.includes(day));
 
 /** Mirrors the database's uniqueness key: lower(regexp_replace(name, …)). */
 const nameKey = (value) => (value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -65,7 +79,8 @@ const AUDIT_LABELS = {
   location_description: "Direction",
   opening_time: "Opens",
   closing_time: "Closes",
-  image_url: "Image URL",
+  operating_days: "Open on",
+  image_url: "Photo",
   pickup_instructions: "Pickup instructions",
   is_active: "Shown in browsing",
 };
@@ -107,18 +122,25 @@ const Required = () => (
  * A disabled button with no explanation leaves the admin guessing which of ten
  * fields is at fault.
  */
-function missingForSupplier({ form, reason, isNew, hasChanges }) {
+function missingForSupplier({ form, reason, isNew, hasChanges, changedLabels = [] }) {
   if (isNew) {
     const missing = [
       !form.name.trim() && "a name",
       !form.place_id && "a location",
       !(form.opening_time && form.closing_time) && "opening and closing times",
+      !form.operating_days.length && "the days it opens",
     ].filter(Boolean);
     return missing.length ? `Enter ${missing.join(", ")}.` : "";
   }
+  if (!form.operating_days.length) return "Select at least one day it opens.";
   // The reason gates Save and Hide alike, so say so: a disabled Hide button
   // with a message about saving explains the wrong control.
-  if (!reason.trim()) return "Give a reason below to save or hide this supplier.";
+  // Name what is waiting, so an edit is not mistaken for a saved change.
+  if (!reason.trim()) {
+    return changedLabels.length
+      ? `Unsaved changes to ${changedLabels.join(", ")}. Give a reason below to save them.`
+      : "Give a reason below to save or hide this supplier.";
+  }
   if (!hasChanges) return "Change a field before saving, or hide this supplier.";
   return "";
 }
@@ -138,6 +160,7 @@ function toPayload(form) {
     longitude: numberOrNull(form.longitude),
     opening_time: blankToNull(form.opening_time),
     closing_time: blankToNull(form.closing_time),
+    operating_days: orderedDays(form.operating_days),
     image_url: blankToNull(form.image_url),
     pickup_instructions: blankToNull(form.pickup_instructions),
   };
@@ -173,6 +196,8 @@ export default function SupplierAdminSection({ token }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [refresh, setRefresh] = useState(0);
+  // A photo the admin picked but has not framed and uploaded yet.
+  const [pendingPhoto, setPendingPhoto] = useState(null);
 
   const selected = suppliers.find((supplier) => supplier.id === selectedId) || null;
   const isNew = selectedId === null;
@@ -225,9 +250,15 @@ export default function SupplierAdminSection({ token }) {
   }, [suppliers, filter]);
 
   const changes = selected ? changedFields(form, selected) : {};
+  // The photo as last saved, so an unsaved removal or replacement can be shown
+  // as pending and undone. A new supplier has nothing saved yet.
+  const savedImage = (!isNew && selected?.image_url) || "";
+  const photoRemoved = Boolean(savedImage) && !form.image_url.trim();
+  const photoReplaced = !isNew && Boolean(form.image_url.trim())
+    && form.image_url.trim() !== savedImage;
   const hasChanges = isNew
     ? Boolean(form.name.trim() && form.place_id
-      && form.opening_time && form.closing_time)
+      && form.opening_time && form.closing_time && form.operating_days.length)
     : Object.keys(changes).length > 0;
   // The combination the unique index refuses, caught before the save so the
   // admin sees the cause rather than a 409. Must match the index expression:
@@ -238,7 +269,14 @@ export default function SupplierAdminSection({ token }) {
     && supplier.place?.id === form.place_id
     && (supplier.floor || "") === form.floor.trim());
 
-  const supplierBlockedBy = missingForSupplier({ form, reason, isNew, hasChanges });
+  const changedLabels = Object.keys(changes).map((field) => AUDIT_LABELS[field] || field);
+  const supplierBlockedBy = missingForSupplier({
+    form, reason, isNew, hasChanges, changedLabels,
+  });
+  // Anything that leaving this form would throw away.
+  const isDirty = isNew
+    ? Object.keys(changedFields(form, null)).length > 0
+    : changedLabels.length > 0;
   const placeBlockedBy = placeName.trim() ? "" : "Enter a name.";
 
   // Stored values are ids, codes and flags. Resolve them against what is
@@ -253,6 +291,9 @@ export default function SupplierAdminSection({ token }) {
       return value ? names.get(value) || "a location no longer listed" : "none";
     }
     if (value === null || value === undefined || value === "") return "not set";
+    if (field === "operating_days") return formatDays(value) || "none";
+    // The file name identifies the photo; the full storage path adds nothing.
+    if (field === "image_url") return String(value).split("/").pop();
     if (Array.isArray(value)) return value.length ? value.join(", ") : "none";
     if (typeof value === "boolean") return value ? "yes" : "no";
     if (field === "supplier_type") return CATEGORY_LABELS[value] || value;
@@ -263,7 +304,9 @@ export default function SupplierAdminSection({ token }) {
   };
 
   const select = (supplier) => {
+    if (isDirty && !window.confirm("Discard your unsaved changes to this supplier?")) return;
     setSelectedId(supplier?.id ?? null);
+    setPendingPhoto(null);
     setForm(supplierForm(supplier));
     setError("");
     setMessage("");
@@ -330,6 +373,44 @@ export default function SupplierAdminSection({ token }) {
       setPlaceParent("");
     }, "Location created.");
   };
+
+  // A chosen file is framed in PhotoCropper before anything is uploaded.
+  const choosePhoto = (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > MAX_IMAGE_BYTES) {
+      setError("Image must be 5MB or smaller.");
+      return;
+    }
+    setError("");
+    setPendingPhoto(file);
+  };
+
+  // Uploading only stores the file; the supplier changes when the form is
+  // saved, so the new photo goes through the same reason and audit entry.
+  const uploadPhoto = async (focus) => {
+    setBusy(true);
+    setError("");
+    try {
+      const { url } = await uploadSupplierImage({ token, file: pendingPhoto, focus });
+      setForm((current) => ({ ...current, image_url: url }));
+      setPendingPhoto(null);
+      setMessage(isNew ? "Photo uploaded. Create the supplier to use it."
+        : "Photo uploaded. Save changes to use it.");
+    } catch (uploadError) {
+      setError(uploadError.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleDay = (day) => setForm((current) => ({
+    ...current,
+    operating_days: current.operating_days.includes(day)
+      ? current.operating_days.filter((selectedDay) => selectedDay !== day)
+      : orderedDays([...current.operating_days, day]),
+  }));
 
   const field = (label, name, type = "text", wide = false, required = false, extra = {}) => (
     <div className={`form-group${wide ? " field-wide" : ""}`} key={name}>
@@ -420,7 +501,11 @@ export default function SupplierAdminSection({ token }) {
           </div>
           {/* Up here rather than by the button: what is missing should be read
               before filling the form, not after scrolling past it. */}
-          {supplierBlockedBy && <p className="form-hint">{supplierBlockedBy}</p>}
+          {supplierBlockedBy && (
+            <p className={`form-hint${!isNew && changedLabels.length ? " has-unsaved" : ""}`}>
+              {supplierBlockedBy}
+            </p>
+          )}
           <form onSubmit={save}>
             {/* Short fields pair up; .field-wide ones span both columns. */}
             <div className="supplier-admin-fields">
@@ -500,7 +585,94 @@ export default function SupplierAdminSection({ token }) {
                 { min: -180, max: 180, step: "any", placeholder: "e.g. 103.7764" })}
               {field("Opens", "opening_time", "time", false, true)}
               {field("Closes", "closing_time", "time", false, true)}
-              {field("Image URL", "image_url", "text", true)}
+              <div className="form-group field-wide">
+                <span className="form-label" id="supplier-days-label">
+                  Open on<Required />
+                </span>
+                <div className="day-picker" role="group" aria-labelledby="supplier-days-label">
+                  {WEEK_DAYS.map(({ value, label }) => {
+                    const on = form.operating_days.includes(value);
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`btn btn-sm ${on ? "btn-primary" : "btn-secondary"}`}
+                        aria-pressed={on}
+                        disabled={busy}
+                        onClick={() => toggleDay(value)}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="day-presets">
+                  <small>Quick pick:</small>
+                  {DAY_PRESETS.map(({ label, days }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className="btn btn-sm"
+                      disabled={busy}
+                      onClick={() => setForm((c) => ({ ...c, operating_days: days }))}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="form-group field-wide">
+                <span className="form-label">Photo</span>
+                {pendingPhoto ? (
+                  <PhotoCropper
+                    file={pendingPhoto}
+                    busy={busy}
+                    onConfirm={uploadPhoto}
+                    onCancel={() => setPendingPhoto(null)}
+                  />
+                ) : (
+                <div className="supplier-photo-field">
+                  {/* A removal stays visible, faded, until it is saved: the
+                      photo is only gone once Save records it with a reason. */}
+                  {form.image_url || photoRemoved ? (
+                    <img className={`supplier-photo-preview${photoRemoved ? " is-pending-removal" : ""}`}
+                         alt="Supplier photo preview"
+                         src={supplierImageSrc(form.image_url || savedImage)} />
+                  ) : (
+                    <div className="supplier-photo-preview supplier-photo-empty">No photo</div>
+                  )}
+                  <div className="supplier-photo-actions">
+                    {photoRemoved || photoReplaced ? (
+                      <p className="photo-pending" role="status">
+                        {photoRemoved
+                          ? "Photo will be removed when you save changes."
+                          : "New photo, not saved yet."}
+                      </p>
+                    ) : null}
+                    <label className={`btn btn-sm btn-secondary${busy ? " is-disabled" : ""}`}>
+                      {form.image_url ? "Replace photo" : "Upload photo"}
+                      <input type="file" accept="image/jpeg,image/png,image/webp"
+                             disabled={busy} onChange={choosePhoto} hidden />
+                    </label>
+                    {form.image_url && (
+                      <button type="button" className="btn btn-sm" disabled={busy}
+                              onClick={() => setForm((c) => ({ ...c, image_url: "" }))}>
+                        Remove
+                      </button>
+                    )}
+                    {(photoRemoved || photoReplaced) && (
+                      <button type="button" className="btn btn-sm" disabled={busy}
+                              onClick={() => setForm((c) => ({ ...c, image_url: savedImage }))}>
+                        Undo
+                      </button>
+                    )}
+                    <small>JPEG, PNG or WebP, up to 5MB. You choose the framing next.</small>
+                  </div>
+                </div>
+                )}
+              </div>
+              {field("Image URL", "image_url", "text", true, false,
+                { placeholder: "Filled in by Upload photo, or paste a link" })}
               {field("Pickup instructions", "pickup_instructions", "text", true)}
             </div>
 
@@ -521,8 +693,11 @@ export default function SupplierAdminSection({ token }) {
             <div className="form-actions">
               {/* Beside the buttons, not only at the top of the card: a
                   disabled button needs its explanation within sight. */}
-              <p className="form-hint">
-                {supplierBlockedBy || <><Required /> required</>}
+              <p className={`form-hint${!isNew && changedLabels.length ? " has-unsaved" : ""}`}>
+                {supplierBlockedBy
+                  || (!isNew && changedLabels.length
+                    ? `Unsaved changes to ${changedLabels.join(", ")}.`
+                    : <><Required /> required</>)}
               </p>
               {!isNew && selected && (
                 <button
@@ -599,6 +774,10 @@ export default function SupplierAdminSection({ token }) {
       {/* Named for its scope: User Service keeps its own log of account changes. */}
       <h3 className="audit-heading">Supplier changes</h3>
       {auditLogs.length === 0 && <p><small>No supplier changes recorded yet.</small></p>}
+      {/* Scrolls on its own so a page of long entries cannot stretch the
+          screen; keyed by page so a new page starts at the top. */}
+      {auditLogs.length > 0 && (
+      <div className="audit-scroll" key={auditPage} tabIndex={0} aria-label="Supplier change entries">
       {auditLogs.map((entry) => {
         const isCreate = entry.action_type.endsWith("_CREATED");
         const { action, subject } = auditTitle(entry, describe);
@@ -629,6 +808,8 @@ export default function SupplierAdminSection({ token }) {
           </div>
         );
       })}
+      </div>
+      )}
       {auditPageCount > 1 && (
         <div className="audit-pagination">
           <button

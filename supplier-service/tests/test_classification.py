@@ -37,8 +37,8 @@ class ClassificationTests(unittest.TestCase):
             validate_supplier_type("COFFEE")
         rows = read_suppliers(DEFAULT_CSV)
         self.assertEqual(Counter(row["supplier_type"] for row in rows),
-                         {"FOOD_BEVERAGE": 16, "RETAIL": 3, "FACILITY": 2})
-        self.assertEqual(sum("coffee" in row["tags"] for row in rows), 5)
+                         {"FOOD_BEVERAGE": 21, "RETAIL": 8, "FACILITY": 2})
+        self.assertEqual(sum("coffee" in row["tags"] for row in rows), 6)
 
     def test_unknown_csv_type_is_not_silently_guessed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -92,23 +92,23 @@ class ClassificationDatabaseTests(unittest.TestCase):
 
     def test_category_tag_storage_and_constraints(self):
         records = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(seed(self.db, records), (21, 21))
+        self.assertEqual(seed(self.db, records), (31, 31))
         with self.db.begin() as connection:
             stored = connection.execute(select(suppliers)).mappings().all()
             self.assertEqual(Counter(row["supplier_type"] for row in stored),
-                             {"FOOD_BEVERAGE": 16, "RETAIL": 3, "FACILITY": 2})
-            self.assertEqual(sum("coffee" in row["tags"] for row in stored), 5)
+                             {"FOOD_BEVERAGE": 21, "RETAIL": 8, "FACILITY": 2})
+            self.assertEqual(sum("coffee" in row["tags"] for row in stored), 6)
             from app.supplier_queries import list_suppliers
             for search in ("cof", "coffee", "COFFEE"):
                 matches = list_suppliers(connection, search=search)
-                self.assertEqual(len(matches), 5)
+                self.assertEqual(len(matches), 6)
                 self.assertTrue(all("coffee" in row["tags"] for row in matches))
 
             place_id = connection.scalar(select(places.c.id).limit(1))
             row = connection.execute(insert(suppliers).values(
                 name="New cafe", supplier_type="FOOD_BEVERAGE", place_id=place_id,
                 tags=[" Coffee ", "coffee", "BUBBLE   TEA"],
-                opening_time="08:00", closing_time="18:00",
+                opening_time="08:00", closing_time="18:00", operating_days=["MON"],
             ).returning(suppliers)).mappings().one()
             self.assertEqual(row["tags"], ["bubble tea", "coffee"])
             connection.execute(update(suppliers).where(suppliers.c.id == row["id"]).values(
@@ -124,7 +124,7 @@ class ClassificationDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 tags=["Admin Tag"], supplier_type="RETAIL"
             ))
-        self.assertEqual(seed(self.db, records), (0, 22))
+        self.assertEqual(seed(self.db, records), (0, 32))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["tags"], ["admin tag"])

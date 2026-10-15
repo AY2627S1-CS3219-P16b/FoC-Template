@@ -16,7 +16,7 @@ from app.seed import DEFAULT_CSV, read_suppliers, seed
 
 
 # Required columns, supplied where the test is about some other constraint.
-HOURS = {"opening_time": "08:00", "closing_time": "18:00"}
+HOURS = {"opening_time": "08:00", "closing_time": "18:00", "operating_days": ["MON"]}
 
 
 class PlaceNormalizationTests(unittest.TestCase):
@@ -34,18 +34,41 @@ class PlaceNormalizationTests(unittest.TestCase):
 
     def test_csv_matches_authored_names(self):
         rows = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(len(rows), 21)
+        self.assertEqual(len(rows), 31)
         instachef = next(row for row in rows if row["name"] == "InstaChef")
         self.assertEqual(instachef["place_key"], "com3")
         self.assertEqual(instachef["location_description"], "Beside Terrace, near the foyer")
         smooy = next(row for row in rows if row["name"] == "Smooy")
         self.assertEqual(smooy["place_key"], "com3")
-        self.assertEqual(smooy["location_description"], "Beside Terrace")
+        self.assertIsNone(smooy["location_description"])
+        self.assertEqual(smooy["operating_days"], ["MON", "TUE", "WED", "THU", "FRI"])
         self.assertEqual(sum(row["place_key"] == "com2" for row in rows), 2)
         self.assertEqual(sum(row["place_key"] == "princegeorgespark" for row in rows), 3)
+        # Food court stalls point at the food court, not the building around it.
+        self.assertEqual(sum(row["place_key"] == "centralsquare" for row in rows), 4)
         names = {row["search_key"]: row["name"] for row in canonical_place_records()}
         self.assertEqual(names["com2"], "COM2")
         self.assertEqual(names["princegeorgespark"], "Prince George's Park")
+
+    def test_csv_operating_days_shorthand(self):
+        for value, expected in (("DAILY", 7), ("MON-FRI", 5), ("MON-SAT", 6)):
+            with tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "suppliers.csv"
+                reader = csv.DictReader(io.StringIO(DEFAULT_CSV.read_text(encoding="utf-8-sig")))
+                rows = list(reader)
+                rows[0]["OperatingDays"] = value
+                with path.open("w", newline="") as output:
+                    writer = csv.DictWriter(output, fieldnames=reader.fieldnames)
+                    writer.writeheader()
+                    writer.writerows(rows)
+                self.assertEqual(len(read_suppliers(path)[0]["operating_days"]), expected)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "suppliers.csv"
+            path.write_text(DEFAULT_CSV.read_text(encoding="utf-8-sig").replace(
+                ",MON-SAT", ",", 1
+            ))
+            with self.assertRaisesRegex(ValueError, "CSV row 2: OperatingDays must not be empty"):
+                read_suppliers(path)
 
     def test_unknown_place_fails_with_row_number(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -90,11 +113,12 @@ class PlaceDatabaseTests(unittest.TestCase):
 
     def test_import_matching_constraints_and_preservation(self):
         records = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(seed(self.db, records), (21, 21))
-        self.assertEqual(seed(self.db, records), (0, 21))
+        self.assertEqual(seed(self.db, records), (31, 31))
+        self.assertEqual(seed(self.db, records), (0, 31))
         with self.db.begin() as connection:
-            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 16)
-            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Frontier", 1), ("The Terrace", 0),
+            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 13)
+            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Central Square", 4),
+                                    ("Yusof Ishak House", 2), ("UTown", 9),
                                     ("Prince George’s Park", 3), ("Prince George's Park", 3)):
                 count = connection.scalar(select(func.count()).select_from(
                     suppliers.join(places)
@@ -102,12 +126,10 @@ class PlaceDatabaseTests(unittest.TestCase):
                 self.assertEqual(count, expected)
             ids = dict(connection.execute(select(places.c.search_key, places.c.id)).all())
             self.assertEqual(connection.scalar(select(places.c.parent_id).where(
-                places.c.id == ids["frontier"])), ids["lt27"])
-            self.assertEqual(connection.scalar(select(places.c.parent_id).where(
-                places.c.id == ids["theterrace"])), ids["com3"])
+                places.c.id == ids["centralsquare"])), ids["yusofishakhouse"])
             # Database constraints protect parent references independently of APIs.
             for statement in (
-                delete(places).where(places.c.id == ids["lt27"]),
+                delete(places).where(places.c.id == ids["yusofishakhouse"]),
                 update(places).where(places.c.id == ids["com3"]).values(parent_id=ids["com3"]),
                 update(places).where(places.c.id == ids["com3"]).values(parent_id=uuid4()),
             ):
@@ -124,6 +146,12 @@ class PlaceDatabaseTests(unittest.TestCase):
                 insert(suppliers).values(name="Bad coordinate", supplier_type="FOOD_BEVERAGE", place_id=place_id, latitude=91, **HOURS),
                 # Hours are required, so Order Service can tell whether a supplier is open.
                 insert(suppliers).values(name="No hours", supplier_type="FOOD_BEVERAGE", place_id=place_id),
+                insert(suppliers).values(name="No days", supplier_type="FOOD_BEVERAGE", place_id=place_id,
+                                         opening_time="08:00", closing_time="18:00"),
+                insert(suppliers).values(name="Empty days", supplier_type="FOOD_BEVERAGE", place_id=place_id,
+                                         **{**HOURS, "operating_days": []}),
+                insert(suppliers).values(name="Bad day", supplier_type="FOOD_BEVERAGE", place_id=place_id,
+                                         **{**HOURS, "operating_days": ["FUN"]}),
             ]
             for statement in invalid_operations:
                 with self.assertRaises(IntegrityError):
@@ -153,7 +181,7 @@ class PlaceDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 name="Edited supplier", is_active=False
             ))
-        self.assertEqual(seed(self.db, records), (0, 21))
+        self.assertEqual(seed(self.db, records), (0, 31))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["name"], "Edited supplier")

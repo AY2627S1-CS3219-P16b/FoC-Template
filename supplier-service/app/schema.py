@@ -4,11 +4,19 @@ from sqlalchemy import (
     Boolean, CheckConstraint, Column, DateTime, Float, ForeignKey, Index, MetaData,
     String, Table, Text, Time, UniqueConstraint, Uuid, func, text, true,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from uuid import uuid4
 
 from .places import place_key_default
 from .classification import MAX_TAGS, SUPPLIER_TYPES, SupplierTags
+from .hours import DAYS
+
+DAYS_ARRAY_SQL = "ARRAY[" + ", ".join(f"'{day}'" for day in DAYS) + "]::varchar(3)[]"
+OPERATING_DAYS_CHECK = (
+    f"cardinality(operating_days) BETWEEN 1 AND 7 "
+    f"AND array_position(operating_days, NULL) IS NULL "
+    f"AND operating_days <@ {DAYS_ARRAY_SQL}"
+)
 
 metadata = MetaData()
 
@@ -46,6 +54,9 @@ suppliers = Table(
     # "Opening hours" in the README before querying these as a range.
     Column("opening_time", Time, nullable=False),
     Column("closing_time", Time, nullable=False),
+    # The weekdays the time range applies to, e.g. {MON,TUE,WED,THU,FRI}.
+    # Required for the same reason as the hours; stored in week order.
+    Column("operating_days", ARRAY(String(3)), nullable=False),
     Column("image_url", Text),
     Column("pickup_instructions", Text),
     Column("is_active", Boolean, nullable=False, server_default=true()),
@@ -58,6 +69,7 @@ suppliers = Table(
     CheckConstraint("array_position(tags, NULL) IS NULL", name="supplier_tags_no_null_elements"),
     CheckConstraint("latitude BETWEEN -90 AND 90", name="supplier_latitude_range"),
     CheckConstraint("longitude BETWEEN -180 AND 180", name="supplier_longitude_range"),
+    CheckConstraint(OPERATING_DAYS_CHECK, name="supplier_operating_days_valid"),
 )
 
 suppliers.append_constraint(CheckConstraint(
@@ -118,6 +130,35 @@ Index("ix_suppliers_place", suppliers.c.place_id)
 Index("ix_suppliers_type", suppliers.c.supplier_type)
 
 Index("ix_places_parent", places.c.parent_id)
+
+
+def create_schema(connection) -> None:
+    """Create missing tables, then add columns introduced after a table existed.
+
+    create_all() never alters an existing table, so a database created before
+    operating days existed gets the column here. Its existing suppliers are
+    marked open every day, which matches the single daily range they had.
+    """
+    metadata.create_all(connection)
+    # Raw SQL bypasses schema_translate_map, so name the schema the tests remap
+    # tables into; normally there is none and the search path applies.
+    schema = connection.get_execution_options().get("schema_translate_map", {}).get(None)
+    table = f'"{schema}".suppliers' if schema else "suppliers"
+    connection.execute(text(f"""
+        ALTER TABLE {table} ADD COLUMN IF NOT EXISTS operating_days varchar(3)[]
+            NOT NULL DEFAULT {DAYS_ARRAY_SQL};
+        ALTER TABLE {table} ALTER COLUMN operating_days DROP DEFAULT;
+    """))
+    connection.execute(text(f"""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                           WHERE conname = 'supplier_operating_days_valid'
+                             AND conrelid = '{table}'::regclass) THEN
+                ALTER TABLE {table} ADD CONSTRAINT supplier_operating_days_valid
+                    CHECK ({OPERATING_DAYS_CHECK});
+            END IF;
+        END $$;
+    """))
 
 # The audit log is read newest-first, and filtered to one record's history.
 Index("ix_supplier_audit_logs_created", supplier_audit_logs.c.created_at.desc())

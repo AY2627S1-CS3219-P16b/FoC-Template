@@ -2,7 +2,8 @@ from contextlib import asynccontextmanager
 from math import ceil
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request, UploadFile, status
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
 from .admin_queries import (
@@ -29,7 +30,8 @@ from .api_schemas import (
 from .auth import CurrentUser, admin_reason, current_user, load_jwt_public_key, require_admin
 from .classification import SUPPLIER_TYPES
 from .database import create_database_engine
-from .schema import metadata
+from .images import MAX_UPLOAD_BYTES, InvalidImageError, create_image_store, process_image
+from .schema import create_schema
 from .supplier_queries import (
     DEFAULT_PAGE_SIZE,
     DEFAULT_SORT,
@@ -48,12 +50,14 @@ def create_app() -> FastAPI:
     # Read once at startup, not per request: the same public key verifies
     # every token for the life of the process.
     public_key = load_jwt_public_key()
+    image_store = create_image_store()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         try:
-            # Creates missing tables; existing supplier records are preserved.
-            metadata.create_all(engine)
+            # Creates missing tables and columns; existing supplier records are preserved.
+            with engine.begin() as connection:
+                create_schema(connection)
             # Open a real connection at startup to verify PostgreSQL is available.
             with engine.connect() as connection:
                 connection.execute(text("SELECT 1"))
@@ -238,6 +242,34 @@ def create_app() -> FastAPI:
                 raise HTTPException(422, str(error)) from error
         return PlaceResponse(**row)
 
+    @app.post("/api/v1/supplier-images", status_code=status.HTTP_201_CREATED)
+    async def upload_supplier_image(
+        file: UploadFile,
+        focus: float = Form(0.5, ge=0, le=1,
+                            description="Where to crop to the card's shape: 0 top/left, 1 bottom/right"),
+        admin: CurrentUser = Depends(require_admin),
+    ) -> dict[str, str]:
+        """Store a supplier photo and return its URL for the image_url field.
+
+        Every upload is cropped to the card's shape at `focus`, chosen by the
+        admin from a preview, so a tall phone photo never loses its sign to
+        the card's own crop.
+
+        Not tied to a supplier, so a new supplier can have its photo before it
+        exists. Saving that URL through the create or update endpoint is what
+        records the change in the audit log.
+        """
+        # One byte over the limit is enough to know the file is too large.
+        data = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
+            raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                "Image must be 5MB or smaller.")
+        try:
+            image = process_image(data, focus=focus)
+        except InvalidImageError as error:
+            raise HTTPException(422, str(error)) from error
+        return {"url": image_store.save(image)}
+
     # Not /api/v1/admin/...: User Service already owns that path, and two
     # services answering the same URL is ambiguous behind a proxy or gateway.
     @app.get("/api/v1/supplier-changes", response_model=AuditLogPage)
@@ -252,5 +284,11 @@ def create_app() -> FastAPI:
             items=rows, page=page, page_size=page_size, total=total,
             total_pages=ceil(total / page_size) if total else 0,
         )
+
+    # Mounted after the upload route so POST reaches it. A mount is outside the
+    # app-wide login dependency on purpose: an <img> tag cannot send a bearer
+    # token, and supplier photos are not private.
+    app.mount(image_store.URL_PREFIX, StaticFiles(directory=image_store.directory),
+              name="supplier-images")
 
     return app
