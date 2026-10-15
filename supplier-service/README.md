@@ -26,6 +26,7 @@ Paths below are relative to `supplier-service/` unless stated otherwise.
 | `app/auth.py`             | Verify callers through User Service                      |
 | `app/classification.py`   | Allowed categories and tag normalization/validation      |
 | `app/hours.py`            | Operating days and the "is it open now?" rule            |
+| `app/images.py`           | Validate, shrink and store supplier photos               |
 | `app/seed.py`             | Validate and import the initial CSV                      |
 | `tests/`                  | Seed, storage, authentication, and admin-endpoint checks |
 
@@ -60,6 +61,8 @@ which returns `403` when the caller is known but not an admin.
 | `DELETE /api/v1/suppliers/{id}` | Hide a supplier from browsing                     | admin    |
 | `POST /api/v1/places`           | Add a place, optionally inside another            | admin    |
 | `GET /api/v1/supplier-changes`  | Every recorded change, newest first               | admin    |
+| `POST /api/v1/supplier-images`  | Upload a photo; returns `{ "url": ... }`          | admin    |
+| `GET /api/v1/supplier-images/{file}` | An uploaded photo, for `<img>` tags          | anyone   |
 
 ### Admin writes
 
@@ -246,6 +249,40 @@ Monday to Friday only — showing a stall as open when it is shut is worse than
 missing its Saturday hours. Anna's x Soup Union is stored as Monday to Saturday
 08:30–18:00 although it closes at 17:00 on Saturdays. If more suppliers need
 per-day hours, replace the single range with a row per day.
+
+## Images
+
+The database stores only a link in `image_url`; image files never go in
+PostgreSQL. There are two kinds:
+
+- **Seed photos** are part of the repository, in
+  `frontend/public/images/suppliers/`, and the CSV links to them as
+  `/images/suppliers/anna.webp`. They were shrunk from the 2.6-5MB camera
+  originals in `data/images/` to 35-120KB.
+- **Uploaded photos.** An admin uploads a file to `POST /api/v1/supplier-images`
+  and gets back a URL, which the form then saves as the supplier's `image_url`.
+  Saving is the step recorded in the audit log, with the usual reason.
+
+Cards show photos at 16:9, so every upload is cropped to that shape before it
+is stored. The admin chooses which part to keep: after picking a file, the
+form shows a card-shaped preview to drag or adjust with a slider, and sends
+the position as `focus` (0 top or left, 1 bottom or right; default 0.5). The
+preview uses the same arithmetic as the crop, so the card matches it exactly.
+
+Every upload is decoded and re-encoded as WebP of at most 800px, so the stored
+file is a real image whatever its name or content type claimed, phone metadata
+such as GPS position is removed, and cards stay small. JPEG, PNG and WebP up to
+5MB are accepted. The service chooses the file name, so an uploader cannot
+choose where a file is written.
+
+Uploaded files go to `SUPPLIER_IMAGE_DIR`: the `supplier-images` Docker volume,
+or `supplier-service/uploads/` (ignored by git) when running outside Docker.
+They are served without a login because an `<img>` tag cannot send a token, and
+supplier photos are not private.
+
+When deployed, `LocalImageStore` in `app/images.py` should be replaced by one
+that writes to S3 and returns the bucket URL; nothing else needs to change. A
+photo that is uploaded but never saved on a supplier stays in storage unused.
 
 ## Categories and tags
 

@@ -15,3 +15,6 @@ __pycache__/
 # OS
 .DS_Store
 Thumbs.db
+
+# Supplier photos uploaded during local development
+supplier-service/uploads/

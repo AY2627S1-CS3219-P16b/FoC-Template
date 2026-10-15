@@ -137,6 +137,7 @@ export function adminErrorMessage(status, body = {}, action = "save") {
   if (status === 404) return "That record no longer exists. Refresh and try again.";
   if (status === 409) return typeof body?.detail === "string" ? body.detail
     : "That change conflicts with an existing record.";
+  if (status === 413) return "Image must be 5MB or smaller.";
   if (status === 422) {
     const detail = body?.detail;
     if (typeof detail === "string") return detail;
@@ -167,6 +168,32 @@ export function updateSupplier({ token, supplierId, changes, reason }) {
   return adminRequest(`/api/v1/suppliers/${encodeURIComponent(supplierId)}`, {
     token, method: "PATCH", data: changes, reason, action: "save this supplier",
   });
+}
+
+/**
+ * Uploads a photo and resolves to `{ url }`. The URL still has to be saved on
+ * the supplier, which is the step the audit log records.
+ *
+ * `focus` (0 top/left to 1 bottom/right) is where the service crops the photo
+ * to the card's shape, as chosen in the admin form's preview.
+ */
+export function uploadSupplierImage({ token, file, focus = 0.5 }) {
+  const data = new FormData();
+  data.append("file", file);
+  data.append("focus", String(focus));
+  return adminRequest("/api/v1/supplier-images", {
+    token, method: "POST", data, action: "upload this image",
+  });
+}
+
+/**
+ * Where to load a supplier's image from. Photos uploaded to this service are
+ * stored as service paths, so they need the service's base URL when the
+ * browser calls it directly; seed photos and full URLs are used as they are.
+ */
+export function supplierImageSrc(imageUrl) {
+  if (!imageUrl) return "";
+  return imageUrl.startsWith("/api/") ? `${API_BASE_URL}${imageUrl}` : imageUrl;
 }
 
 /** Hides a supplier from browsing; the record stays so orders still resolve. */

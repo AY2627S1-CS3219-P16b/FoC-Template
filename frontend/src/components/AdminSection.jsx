@@ -265,7 +265,11 @@ export default function AdminSection({ token, currentUserId }) {
         {auditError && <div className="action-error" role="alert">{auditError}</div>}
         {auditLoading && <p>Loading audit history...</p>}
         {!auditLoading && !auditError && auditLogs.length === 0 && <p>No admin changes recorded.</p>}
-        {!auditLoading && !auditError && auditLogs.map((entry) => (
+        {/* Scrolls on its own so a page of long entries cannot stretch the
+            screen; keyed by page so a new page starts at the top. */}
+        {!auditLoading && !auditError && auditLogs.length > 0 && (
+        <div className="audit-scroll" key={auditPage} tabIndex={0} aria-label="Audit history entries">
+        {auditLogs.map((entry) => (
           <article className="audit-entry" key={entry.id}>
             <div className="audit-entry-header">
               <strong>{entry.action_type === "PROFILE_UPDATED" ? "Profile updated" : entry.action_type === "AUTH_ROLE_CHANGED" ? "Authorization role changed" : "Account status changed"}</strong>
@@ -298,6 +302,8 @@ export default function AdminSection({ token, currentUserId }) {
             <p className="audit-reason"><strong>Reason:</strong> {entry.reason}</p>
           </article>
         ))}
+        </div>
+        )}
         {!auditLoading && !auditError && auditTotal > AUDIT_PAGE_SIZE && (
           <nav className="audit-pagination" aria-label="Audit history pages">
             <button className="btn btn-secondary btn-sm" type="button" disabled={auditPage === 1} onClick={() => setAuditPage((page) => page - 1)}>Previous</button>

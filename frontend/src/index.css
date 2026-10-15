@@ -626,6 +626,24 @@ body {
   font-size: 12px;
 }
 
+/* A fixed-height window onto the log, so it scrolls instead of growing. */
+.audit-scroll {
+  max-height: 520px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 6px;
+  margin-bottom: 12px;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+}
+.audit-scroll:focus-visible {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+.audit-scroll .audit-entry:first-child {
+  margin-top: 12px;
+}
+
 .audit-entry {
   border: 1px solid #d8dce5;
   padding: 14px;
@@ -709,6 +727,95 @@ body {
   font-weight: bold;
   font-size: 13px;
   margin-bottom: 3px;
+}
+
+/* Admin photo field: a preview beside the upload controls. */
+.supplier-photo-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+.supplier-photo-preview {
+  width: 160px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border: 1px solid #cccccc;
+  background: #edf2f7;
+}
+.supplier-photo-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  font-size: 12px;
+}
+.supplier-photo-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.supplier-photo-preview.is-pending-removal {
+  opacity: 0.35;
+  filter: grayscale(1);
+}
+/* Unsaved edits read as a warning, not a neutral hint. */
+.form-hint.has-unsaved {
+  color: #b45309;
+  font-weight: 600;
+}
+.photo-pending {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #b45309;
+}
+.supplier-photo-actions .is-disabled {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Framing step for a new photo: a card-shaped preview the admin drags. */
+.photo-cropper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 360px;
+}
+.photo-cropper-frame {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid #cccccc;
+  background: #edf2f7;
+  touch-action: none;
+  user-select: none;
+}
+.photo-cropper-frame.is-draggable {
+  cursor: grab;
+}
+.photo-cropper-frame.is-draggable:active {
+  cursor: grabbing;
+}
+.photo-cropper-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+.photo-cropper-slider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.photo-cropper-slider input {
+  flex: 1;
+}
+.photo-cropper-actions {
+  display: flex;
+  gap: 6px;
 }
 
 /* Seven day toggles, then quick picks; wraps on narrow screens. */
@@ -1013,6 +1120,30 @@ th {
   min-width: 0;
   margin-bottom: 0;
 }
+
+/* Bleeds to the card edges; every card's image area is the same height so the
+   grid lines up whether or not a supplier has a photo. */
+.supplier-image {
+  display: block;
+  width: calc(100% + 28px);
+  margin: -14px -14px 12px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #edf2f7;
+}
+
+.supplier-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.category-FOOD_BEVERAGE { background: #fdf0e6; color: #b5652b; }
+.category-RETAIL { background: #e8f1fb; color: #2f6aa8; }
+.category-FACILITY { background: #eef0f3; color: #5b6472; }
 
 .supplier-card-header {
   display: flex;
