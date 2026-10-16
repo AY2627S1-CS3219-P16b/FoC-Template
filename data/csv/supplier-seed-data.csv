@@ -9,24 +9,24 @@ InstaChef,FOOD_BEVERAGE,,COM3,1,"Beside Terrace, near the foyer",1.2938898,103.7
 InstaChef,FOOD_BEVERAGE,,UTown,,,,,0000hrs,2359hrs,/images/suppliers/instachef.webp,DAILY
 Cafe+ Robot Cafe,FOOD_BEVERAGE,coffee,Central Library,1,Opp to central library entrance,1.296444,103.773032,0000hrs,2359hrs,/images/suppliers/robot-cafe.webp,DAILY
 A Hot Hideout,FOOD_BEVERAGE,,Prince George's Park,2,Near PGP entrance,1.2908445,103.7770891,1130hrs,0130hrs,/images/suppliers/a-hot-hideout.webp,DAILY
-Wok Express,FOOD_BEVERAGE,,Central Square,1,,1.2984401,103.7726256,0800hrs,2000hrs,,MON-FRI
-Tempu Ramen,FOOD_BEVERAGE,,Central Square,1,,1.2984401,103.7726256,0800hrs,2000hrs,,MON-FRI
-Potato Corner,FOOD_BEVERAGE,,Central Square,1,,1.2984401,103.7726256,0800hrs,2000hrs,,MON-FRI
-Mini Wok,FOOD_BEVERAGE,,Central Square,1,,1.2984401,103.7726256,0800hrs,2000hrs,,MON-FRI
-TOMORO COFFEE,FOOD_BEVERAGE,coffee,Hon Sui Sen Memorial Library,2,Inside HSSML,1.2931259,103.7719943,0800hrs,1800hrs,,MON-FRI
+TOMORO COFFEE,FOOD_BEVERAGE,coffee,Hon Sui Sen Memorial Library,2,Inside HSSML,1.2931259,103.7719943,0800hrs,1800hrs,/images/suppliers/tomoro-hssml.webp,MON-FRI
 TOMORO COFFEE,FOOD_BEVERAGE,coffee,UTown,,Near Yale-NUS library,,,0800hrs,1800hrs,,MON-FRI
-Octobox,RETAIL,convenience,Prince George's Park,2,Near PGP entrance,1.2904347,103.7787588,0000hrs,2359hrs,,DAILY
-Octobox,RETAIL,convenience,UTown,,,,,0000hrs,2359hrs,,DAILY
-Subway,FOOD_BEVERAGE,,UTown,,,,,0830hrs,2130hrs,,DAILY
-Smooy,FOOD_BEVERAGE,,COM3,1,,1.2948308,103.7716305,1130hrs,1730hrs,,MON-FRI
-Waa Cow!,FOOD_BEVERAGE,,UTown,,,,,1130hrs,2030hrs,,DAILY
+Octobox,RETAIL,convenience,Prince George's Park,2,Near PGP entrance,1.2904347,103.7787588,0000hrs,2359hrs,/images/suppliers/octobox-pgp.webp,DAILY
+Octobox,RETAIL,convenience,UTown,,,,,0000hrs,2359hrs,/images/suppliers/octobox-utown.webp,DAILY
+Subway,FOOD_BEVERAGE,,UTown,,,,,0830hrs,2130hrs,/images/suppliers/subway.webp,DAILY
+Smooy,FOOD_BEVERAGE,,COM3,1,,1.2948308,103.7716305,1130hrs,1730hrs,/images/suppliers/smooy.webp,MON-FRI
+Waa Cow!,FOOD_BEVERAGE,,UTown,,,,,1130hrs,2030hrs,/images/suppliers/waa-cow.webp,DAILY
 Bueno Bueno,FOOD_BEVERAGE,,UTown,,,,,1130hrs,2030hrs,,DAILY
-Goh Bros E-Print Pte Ltd,FACILITY,printing,Yusof Ishak House,5,Take the long staircase up YIH,1.2984905,103.7720544,0900hrs,1800hrs,,MON-FRI
-Cheers,RETAIL,convenience,Engineering Block E3,4,,1.2994341,103.7526298,0000hrs,2359hrs,,DAILY
-Cheers,RETAIL,convenience,Yusof Ishak House,,,,,0000hrs,2359hrs,,DAILY
-FairPrice Xpress,RETAIL,convenience,UTown,,,,,0000hrs,2359hrs,,DAILY
-Supersnacks,FOOD_BEVERAGE,,Prince George's Park,1,"At level 1 in Prince George's Park Residences, Block 10",1.2913847,103.7776367,1800hrs,0200hrs,,DAILY
-Supersnacks,FOOD_BEVERAGE,,UTown,,,,,1800hrs,0200hrs,,DAILY
-Good Day Cafe,FOOD_BEVERAGE,coffee,Medicine+Science Library,1,Inside MedScience library ,1.2967989,103.7794336,0730hrs,1830hrs,,MON-FRI
-The Coffee Roaster,FOOD_BEVERAGE,coffee,Blk AS8,1,Behind central library bus stop,1.296252229,103.7720926,0800hrs,1730hrs,,MON-FRI
-he by He Brews,FOOD_BEVERAGE,coffee,Engineering Block EA,1,Near LT7 & Engineering Auditorium,1.300566804,103.7707577,0700hrs,1600hrs,,MON-FRI
+Goh Bros E-Print Pte Ltd,FACILITY,printing,Yusof Ishak House,5,Take the long staircase up YIH,1.2984905,103.7720544,0900hrs,1800hrs,/images/suppliers/goh-bros-yih.webp,MON-FRI
+Cheers,RETAIL,convenience,Engineering Block E3,4,,1.2994341,103.7526298,0000hrs,2359hrs,/images/suppliers/cheers-e3.webp,DAILY
+Cheers,RETAIL,convenience,Yusof Ishak House,,,,,0000hrs,2359hrs,/images/suppliers/cheers-yih.webp,DAILY
+FairPrice Xpress,RETAIL,convenience,UTown,,,,,0000hrs,2359hrs,/images/suppliers/fairprice-xpress.webp,DAILY
+Supersnacks,FOOD_BEVERAGE,,Prince George's Park,1,"At level 1 in Prince George's Park Residences, Block 10",1.2913847,103.7776367,1800hrs,0200hrs,/images/suppliers/supersnacks-pgp.webp,DAILY
+Supersnacks,FOOD_BEVERAGE,,UTown,,,,,1800hrs,0200hrs,/images/suppliers/supersnacks-utown.webp,DAILY
+Good Day Cafe,FOOD_BEVERAGE,coffee,Medicine+Science Library,1,Inside MedScience library ,1.2967989,103.7794336,0730hrs,1830hrs,/images/suppliers/good-day-cafe.webp,MON-FRI
+The Coffee Roaster,FOOD_BEVERAGE,coffee,Blk AS8,1,Behind central library bus stop,1.296252229,103.7720926,0800hrs,1730hrs,/images/suppliers/the-coffee-roaster.webp,MON-FRI
+he by He Brews,FOOD_BEVERAGE,coffee,Engineering Block EA,1,Near LT7 & Engineering Auditorium,1.300566804,103.7707577,0700hrs,1600hrs,/images/suppliers/he-by-he-brews.webp,MON-FRI
+Starbucks,FOOD_BEVERAGE,coffee,UTown,,,,,0000hrs,2359hrs,/images/suppliers/starbucks-utown.webp,DAILY
+The Coffee Bean & Tea Leaf,FOOD_BEVERAGE,coffee,COM3,,,,,0900hrs,1800hrs,/images/suppliers/coffee-bean-com3.webp,MON-FRI
+CHAGEE,FOOD_BEVERAGE,,Yusof Ishak House,1,,,,1030hrs,2030hrs,/images/suppliers/chagee-yih.webp,DAILY
+The Acai Truck,FOOD_BEVERAGE,,PGP Canteen,2,,,,1100hrs,1930hrs,/images/suppliers/the-acai-truck.webp,MON-FRI

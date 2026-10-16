@@ -20,6 +20,7 @@ CANONICAL_PLACES = (
     ('UTown', None),
     ('Yusof Ishak House', None),
     ('Central Square', 'Yusof Ishak House'),
+    ('PGP Canteen', "Prince George's Park"),
 )
 
 

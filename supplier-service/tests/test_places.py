@@ -44,8 +44,6 @@ class PlaceNormalizationTests(unittest.TestCase):
         self.assertEqual(smooy["operating_days"], ["MON", "TUE", "WED", "THU", "FRI"])
         self.assertEqual(sum(row["place_key"] == "com2" for row in rows), 2)
         self.assertEqual(sum(row["place_key"] == "princegeorgespark" for row in rows), 3)
-        # Food court stalls point at the food court, not the building around it.
-        self.assertEqual(sum(row["place_key"] == "centralsquare" for row in rows), 4)
         names = {row["search_key"]: row["name"] for row in canonical_place_records()}
         self.assertEqual(names["com2"], "COM2")
         self.assertEqual(names["princegeorgespark"], "Prince George's Park")
@@ -116,9 +114,9 @@ class PlaceDatabaseTests(unittest.TestCase):
         self.assertEqual(seed(self.db, records), (31, 31))
         self.assertEqual(seed(self.db, records), (0, 31))
         with self.db.begin() as connection:
-            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 13)
-            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Central Square", 4),
-                                    ("Yusof Ishak House", 2), ("UTown", 9),
+            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 14)
+            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Central Square", 0),
+                                    ("Yusof Ishak House", 3), ("UTown", 10),
                                     ("Prince George’s Park", 3), ("Prince George's Park", 3)):
                 count = connection.scalar(select(func.count()).select_from(
                     suppliers.join(places)

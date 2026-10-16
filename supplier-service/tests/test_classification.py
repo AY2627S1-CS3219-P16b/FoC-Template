@@ -38,7 +38,7 @@ class ClassificationTests(unittest.TestCase):
         rows = read_suppliers(DEFAULT_CSV)
         self.assertEqual(Counter(row["supplier_type"] for row in rows),
                          {"FOOD_BEVERAGE": 21, "RETAIL": 8, "FACILITY": 2})
-        self.assertEqual(sum("coffee" in row["tags"] for row in rows), 6)
+        self.assertEqual(sum("coffee" in row["tags"] for row in rows), 8)
 
     def test_unknown_csv_type_is_not_silently_guessed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -97,11 +97,11 @@ class ClassificationDatabaseTests(unittest.TestCase):
             stored = connection.execute(select(suppliers)).mappings().all()
             self.assertEqual(Counter(row["supplier_type"] for row in stored),
                              {"FOOD_BEVERAGE": 21, "RETAIL": 8, "FACILITY": 2})
-            self.assertEqual(sum("coffee" in row["tags"] for row in stored), 6)
+            self.assertEqual(sum("coffee" in row["tags"] for row in stored), 8)
             from app.supplier_queries import list_suppliers
             for search in ("cof", "coffee", "COFFEE"):
                 matches = list_suppliers(connection, search=search)
-                self.assertEqual(len(matches), 6)
+                self.assertEqual(len(matches), 8)
                 self.assertTrue(all("coffee" in row["tags"] for row in matches))
 
             place_id = connection.scalar(select(places.c.id).limit(1))
