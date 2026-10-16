@@ -332,6 +332,46 @@ def assign_courier(
         return dict(accepted)
 
 
+def _advance_courier_order(
+    connection: Connection,
+    order_id: str,
+    courier_user_id: str,
+    *,
+    previous_status: str,
+    next_status: str,
+    action: str,
+) -> dict[str, object]:
+    """Apply a courier transition and its log together; the caller commits."""
+    order_id = _required_text(order_id, "order_id")
+    courier_user_id = _required_text(courier_user_id, "courier_user_id")
+    with connection.begin_nested():
+        order = connection.execute(
+            select(orders).where(orders.c.id == order_id).with_for_update()
+        ).mappings().one_or_none()
+        if order is None:
+            raise OrderNotFoundError("Order does not exist.")
+        if order["courier_user_id"] != courier_user_id:
+            raise OrderAccessDeniedError("Only the assigned courier can update this order.")
+        if order["status"] == next_status:
+            return dict(order)
+        if order["status"] != previous_status:
+            raise OrderStateError(f"Order must be {previous_status} to move to {next_status}.")
+
+        now = connection.execute(select(func.clock_timestamp())).scalar_one()
+        updated = connection.execute(
+            update(orders).where(orders.c.id == order_id)
+            .values(status=next_status, updated_at=now).returning(orders)
+        ).mappings().one()
+        connection.execute(
+            insert(order_log).values(
+                order_id=order_id, actor_user_id=courier_user_id, action=action,
+                outcome="SUCCEEDED", previous_status=previous_status,
+                new_status=next_status, details={}, created_at=now,
+            )
+        )
+        return dict(updated)
+
+
 def mark_items_collected(
     connection: Connection,
     order_id: str,
@@ -339,7 +379,10 @@ def mark_items_collected(
     courier_user_id: str,
 ) -> dict[str, object]:
     """Let the assigned courier move ACCEPTED to PICKED_UP."""
-    pass
+    return _advance_courier_order(
+        connection, order_id, courier_user_id,
+        previous_status="ACCEPTED", next_status="PICKED_UP", action="MARK_ITEMS_COLLECTED",
+    )
 
 
 def mark_delivery_completed(
@@ -349,7 +392,10 @@ def mark_delivery_completed(
     courier_user_id: str,
 ) -> dict[str, object]:
     """Let the assigned courier move PICKED_UP to DELIVERED, awaiting receipt."""
-    pass
+    return _advance_courier_order(
+        connection, order_id, courier_user_id,
+        previous_status="PICKED_UP", next_status="DELIVERED", action="MARK_DELIVERY_COMPLETED",
+    )
 
 
 def confirm_order_receipt(
