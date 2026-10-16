@@ -192,7 +192,44 @@ def get_user_orders(
     page_size: int = 20,
 ) -> dict[str, object]:
     """List the caller's requests or courier assignments, newest first."""
-    pass
+    user_id = _required_text(user_id, "user_id")
+    role = _required_text(role, "role")
+
+    if status is not None:
+        status = _required_text(status, "status")
+        if status not in ORDER_STATUSES:
+            raise ValueError("status must be a valid order status")
+    if role not in {"requester", "courier"}:
+        raise ValueError("role must be a valid role")
+    if type(page) is not int or page < 1:
+        raise ValueError("page must be a positive integer")
+    if type(page_size) is not int or not 1 <= page_size <= 100:
+        raise ValueError("page_size must be an integer between 1 and 100")
+
+    owner_column = (
+        orders.c.requester_user_id if role == "requester" else orders.c.courier_user_id
+    )
+    filters = [owner_column == user_id]
+    if status is not None:
+        filters.append(orders.c.status == status)
+
+    total = connection.execute(
+        select(func.count()).select_from(orders).where(*filters)
+    ).scalar_one()
+    records = connection.execute(
+        select(orders)
+        .where(*filters)
+        .order_by(orders.c.created_at.desc(), orders.c.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).mappings().all()
+    return {
+        "items": [dict(record) for record in records],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 def get_order_details(
