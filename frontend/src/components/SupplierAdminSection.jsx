@@ -15,6 +15,7 @@ import {
   updateSupplier,
   uploadSupplierImage,
 } from "../api/suppliers";
+import ConfirmDialog from "./ConfirmDialog";
 import PhotoCropper from "./PhotoCropper";
 import PlaceTreeSelect from "./PlaceTreeSelect";
 
@@ -198,6 +199,8 @@ export default function SupplierAdminSection({ token }) {
   const [refresh, setRefresh] = useState(0);
   // A photo the admin picked but has not framed and uploaded yet.
   const [pendingPhoto, setPendingPhoto] = useState(null);
+  // Where the admin tried to go with unsaved edits; set while the dialog is open.
+  const [discardTarget, setDiscardTarget] = useState(null);
 
   const selected = suppliers.find((supplier) => supplier.id === selectedId) || null;
   const isNew = selectedId === null;
@@ -304,7 +307,16 @@ export default function SupplierAdminSection({ token }) {
   };
 
   const select = (supplier) => {
-    if (isDirty && !window.confirm("Discard your unsaved changes to this supplier?")) return;
+    // Wrapped, because null (the new-supplier form) is a valid target too.
+    if (isDirty) {
+      setDiscardTarget({ supplier });
+      return;
+    }
+    openSupplier(supplier);
+  };
+
+  const openSupplier = (supplier) => {
+    setDiscardTarget(null);
     setSelectedId(supplier?.id ?? null);
     setPendingPhoto(null);
     setForm(supplierForm(supplier));
@@ -830,6 +842,16 @@ export default function SupplierAdminSection({ token }) {
             Next
           </button>
         </div>
+      )}
+      {discardTarget && (
+        <ConfirmDialog
+          title="Discard unsaved changes?"
+          message={`Your changes to ${isNew ? "this new supplier" : selected?.name || "this supplier"} have not been saved. They will be lost if you continue.`}
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          onConfirm={() => openSupplier(discardTarget.supplier)}
+          onCancel={() => setDiscardTarget(null)}
+        />
       )}
     </section>
   );

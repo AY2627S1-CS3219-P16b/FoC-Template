@@ -180,6 +180,12 @@ body {
   border-color: #cccccc;
 }
 
+.btn-danger {
+  background-color: #c62828;
+  color: #ffffff;
+  border-color: #c62828;
+}
+
 .btn-sm {
   padding: 3px 8px;
   font-size: 12px;
@@ -873,6 +879,25 @@ body {
   margin-bottom: 12px;
   border-bottom: 1px solid #eeeeee;
   padding-bottom: 6px;
+}
+
+.confirm-dialog {
+  max-width: 400px;
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 8px;
+}
+
+.confirm-dialog p {
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Tables */
