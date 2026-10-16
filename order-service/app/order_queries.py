@@ -11,14 +11,27 @@ import json
 from typing import Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, insert, or_, select, text
+from sqlalchemy import func, insert, or_, select, text, update
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import SQLAlchemyError
 
 from .schema import ORDER_STATUSES, credit_jobs, order_log, orders
 
 
 class OrderIdempotencyConflict(ValueError):
     """An existing request key was reused with different order details (HTTP 409)."""
+
+
+class OrderNotFoundError(LookupError):
+    """The requested order does not exist (HTTP 404)."""
+
+
+class OrderAccessDeniedError(PermissionError):
+    """The caller cannot access the requested order data (HTTP 403)."""
+
+
+class OrderStateError(ValueError):
+    """The order's current state does not allow this operation (HTTP 409)."""
 
 
 def _required_text(value: str | UUID, field_name: str) -> str:
@@ -238,9 +251,36 @@ def get_order_details(
     *,
     viewer_user_id: str,
 ) -> dict[str, object]:
-    """Read an order after checking visibility for the authenticated viewer."""
-    pass
+    """Read an order visible to its participants or to an authenticated browser.
 
+    Requesters and assigned couriers can read their orders in any state. Other
+    users can only read unexpired OPEN orders, matching browse visibility.
+    """
+    viewer_user_id = _required_text(viewer_user_id, "viewer_user_id")
+    order_id = _required_text(order_id, "order_id")
+
+    row = connection.execute(
+        select(
+            orders,
+            (
+                (orders.c.status == "OPEN")
+                & (orders.c.expires_at > func.statement_timestamp())
+            ).label("is_browsable"),
+        ).where(orders.c.id == order_id)
+    ).mappings().one_or_none()
+    if row is None:
+        raise OrderNotFoundError("Order does not exist.")
+
+    order = dict(row)
+    is_browsable = order.pop("is_browsable")
+    is_participant = viewer_user_id in (
+        order["requester_user_id"], order["courier_user_id"],
+    )
+    if not is_participant and not is_browsable:
+        raise OrderAccessDeniedError(
+            "Only the requester or assigned courier can read this order."
+        )
+    return order
 
 def assign_courier(
     connection: Connection,
@@ -248,8 +288,48 @@ def assign_courier(
     *,
     courier_user_id: str,
 ) -> dict[str, object]:
-    """Atomically accept an unexpired OPEN order, excluding its requester."""
-    pass
+    """Atomically accept an unexpired OPEN order, excluding its requester.
+
+    Lock the order until the caller's transaction ends. Update the assignment
+    and history together; an identical retry while ACCEPTED adds no new log.
+    The endpoint must verify courier role mode and supply the JWT's user ID.
+    """
+    courier_user_id = _required_text(courier_user_id, "courier_user_id")
+    order_id = _required_text(order_id, "order_id")
+
+    with connection.begin_nested():
+        order = connection.execute(
+            select(orders).where(orders.c.id == order_id).with_for_update()
+        ).mappings().one_or_none()
+        if order is None:
+            raise OrderNotFoundError("Order does not exist.")
+        if courier_user_id == order["requester_user_id"]:
+            raise OrderAccessDeniedError("Requesters cannot accept their own orders.")
+        if order["status"] == "ACCEPTED" and order["courier_user_id"] == courier_user_id:
+            return dict(order)
+        if order["status"] != "OPEN" or order["courier_user_id"] is not None:
+            raise OrderStateError("Only an unassigned OPEN order can be accepted.")
+
+        # Read current database time after acquiring the lock: waiting for another
+        # transaction must not let a courier accept an order past its deadline.
+        now = connection.execute(select(func.clock_timestamp())).scalar_one()
+        if order["expires_at"] <= now:
+            raise OrderStateError("The order's acceptance deadline has passed.")
+
+        accepted = connection.execute(
+            update(orders)
+            .where(orders.c.id == order_id)
+            .values(courier_user_id=courier_user_id, status="ACCEPTED", updated_at=now)
+            .returning(orders)
+        ).mappings().one()
+        connection.execute(
+            insert(order_log).values(
+                order_id=order_id, actor_user_id=courier_user_id,
+                action="ACCEPT_ORDER", outcome="SUCCEEDED", previous_status="OPEN",
+                new_status="ACCEPTED", details={}, created_at=now,
+            )
+        )
+        return dict(accepted)
 
 
 def mark_items_collected(
@@ -304,12 +384,54 @@ def get_order_history(
     page_size: int = 20,
 ) -> dict[str, object]:
     """Read chronological history for the requester or assigned courier."""
-    pass
+    order_id = _required_text(order_id, "order_id")
+    viewer_user_id = _required_text(viewer_user_id, "viewer_user_id")
+    if type(page) is not int or page < 1:
+        raise ValueError("page must be a positive integer")
+    if type(page_size) is not int or not 1 <= page_size <= 100:
+        raise ValueError("page_size must be an integer between 1 and 100")
+
+    order = connection.execute(
+        select(orders.c.requester_user_id, orders.c.courier_user_id)
+        .where(orders.c.id == order_id)
+    ).mappings().one_or_none()
+    if order is None:
+        raise OrderNotFoundError("Order does not exist.")
+    if viewer_user_id not in (order["requester_user_id"], order["courier_user_id"]):
+        raise OrderAccessDeniedError(
+            "Only the requester or assigned courier can read order history."
+        )
+
+    total = connection.execute(
+        select(func.count()).select_from(order_log)
+        .where(order_log.c.order_id == order_id)
+    ).scalar_one()
+    records = connection.execute(
+        select(order_log)
+        .where(order_log.c.order_id == order_id)
+        .order_by(order_log.c.created_at.asc(), order_log.c.id.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).mappings().all()
+    return {
+        "items": [dict(record) for record in records],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "total_pages": (total + page_size - 1) // page_size,
+    }
 
 
 def check_database_health(connection: Connection) -> bool:
-    """Check database connectivity for GET /health."""
-    pass
+    """Return whether SELECT 1 succeeds; use a dedicated health-check connection.
+
+    The endpoint should return HTTP 503 when this returns False. The caller
+    owns connection cleanup, including rollback after a failed statement.
+    """
+    try:
+        return connection.execute(text("SELECT 1")).scalar_one() == 1
+    except SQLAlchemyError:
+        return False
 
 
 def expire_open_orders(
