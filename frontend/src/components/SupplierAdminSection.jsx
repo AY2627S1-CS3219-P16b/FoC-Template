@@ -123,7 +123,7 @@ const Required = () => (
  * A disabled button with no explanation leaves the admin guessing which of ten
  * fields is at fault.
  */
-function missingForSupplier({ form, reason, isNew, hasChanges, changedLabels = [] }) {
+function missingForSupplier({ form, reason, isNew, hasChanges }) {
   if (isNew) {
     const missing = [
       !form.name.trim() && "a name",
@@ -136,12 +136,7 @@ function missingForSupplier({ form, reason, isNew, hasChanges, changedLabels = [
   if (!form.operating_days.length) return "Select at least one day it opens.";
   // The reason gates Save and Hide alike, so say so: a disabled Hide button
   // with a message about saving explains the wrong control.
-  // Name what is waiting, so an edit is not mistaken for a saved change.
-  if (!reason.trim()) {
-    return changedLabels.length
-      ? `Unsaved changes to ${changedLabels.join(", ")}. Give a reason below to save them.`
-      : "Give a reason below to save or hide this supplier.";
-  }
+  if (!reason.trim()) return "Give a reason below to save or hide this supplier.";
   if (!hasChanges) return "Change a field before saving, or hide this supplier.";
   return "";
 }
@@ -179,7 +174,7 @@ function changedFields(form, supplier) {
   );
 }
 
-export default function SupplierAdminSection({ token }) {
+export default function SupplierAdminSection({ token, onUnsavedChange }) {
   const [suppliers, setSuppliers] = useState([]);
   const [places, setPlaces] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -272,14 +267,13 @@ export default function SupplierAdminSection({ token }) {
     && supplier.place?.id === form.place_id
     && (supplier.floor || "") === form.floor.trim());
 
-  const changedLabels = Object.keys(changes).map((field) => AUDIT_LABELS[field] || field);
-  const supplierBlockedBy = missingForSupplier({
-    form, reason, isNew, hasChanges, changedLabels,
-  });
+  const supplierBlockedBy = missingForSupplier({ form, reason, isNew, hasChanges });
   // Anything that leaving this form would throw away.
-  const isDirty = isNew
-    ? Object.keys(changedFields(form, null)).length > 0
-    : changedLabels.length > 0;
+  const isDirty = Object.keys(isNew ? changedFields(form, null) : changes).length > 0;
+  // Lets the app warn before a tab switch, logout or reload drops these edits.
+  useEffect(() => { onUnsavedChange?.(isDirty); }, [isDirty, onUnsavedChange]);
+  useEffect(() => () => onUnsavedChange?.(false), [onUnsavedChange]);
+
   const placeBlockedBy = placeName.trim() ? "" : "Enter a name.";
 
   // Stored values are ids, codes and flags. Resolve them against what is
@@ -514,9 +508,7 @@ export default function SupplierAdminSection({ token }) {
           {/* Up here rather than by the button: what is missing should be read
               before filling the form, not after scrolling past it. */}
           {supplierBlockedBy && (
-            <p className={`form-hint${!isNew && changedLabels.length ? " has-unsaved" : ""}`}>
-              {supplierBlockedBy}
-            </p>
+            <p className="form-hint">{supplierBlockedBy}</p>
           )}
           <form onSubmit={save}>
             {/* Short fields pair up; .field-wide ones span both columns. */}
@@ -705,11 +697,8 @@ export default function SupplierAdminSection({ token }) {
             <div className="form-actions">
               {/* Beside the buttons, not only at the top of the card: a
                   disabled button needs its explanation within sight. */}
-              <p className={`form-hint${!isNew && changedLabels.length ? " has-unsaved" : ""}`}>
-                {supplierBlockedBy
-                  || (!isNew && changedLabels.length
-                    ? `Unsaved changes to ${changedLabels.join(", ")}.`
-                    : <><Required /> required</>)}
+              <p className="form-hint">
+                {supplierBlockedBy || <><Required /> required</>}
               </p>
               {!isNew && selected && (
                 <button

@@ -34,7 +34,7 @@ function auditValue(value) {
   return value === null || value === undefined || value === "" ? "Not set" : String(value);
 }
 
-export default function AdminSection({ token, currentUserId }) {
+export default function AdminSection({ token, currentUserId, onUnsavedChange }) {
   const [accounts, setAccounts] = useState([]);
   const [endpointResults, setEndpointResults] = useState({ accounts: null, audit: null });
   const [auditLogs, setAuditLogs] = useState([]);
@@ -64,6 +64,10 @@ export default function AdminSection({ token, currentUserId }) {
     nextStatus !== selected.account_status
   );
   const auditPageCount = Math.max(1, Math.ceil(auditTotal / AUDIT_PAGE_SIZE));
+
+  // Lets the app warn before a tab switch, logout or reload drops these edits.
+  useEffect(() => { onUnsavedChange?.(Boolean(hasChanges)); }, [hasChanges, onUnsavedChange]);
+  useEffect(() => () => onUnsavedChange?.(false), [onUnsavedChange]);
 
   useEffect(() => {
     let active = true;

@@ -766,11 +766,6 @@ body {
   opacity: 0.35;
   filter: grayscale(1);
 }
-/* Unsaved edits read as a warning, not a neutral hint. */
-.form-hint.has-unsaved {
-  color: #b45309;
-  font-weight: 600;
-}
 .photo-pending {
   margin: 0;
   font-size: 12px;

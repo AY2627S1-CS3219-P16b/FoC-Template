@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "./components/Navbar";
 import SuppliersSection from "./components/SuppliersSection";
 import CreateOrderModal from "./components/CreateOrderModal";
@@ -9,6 +9,7 @@ import CreditsSection from "./components/CreditsSection";
 import ProfileSection from "./components/ProfileSection";
 import AdminSection from "./components/AdminSection";
 import SupplierAdminSection from "./components/SupplierAdminSection";
+import ConfirmDialog from "./components/ConfirmDialog";
 import {
   initialSuppliers,
   initialOrders,
@@ -666,6 +667,42 @@ export default function App() {
   const [role, setRole] = useState(user.activeRoleMode); // 'REQUESTER' | 'COURIER'
   const [activeTab, setActiveTab] = useState(initialTab); // 'suppliers', 'my-requests', 'courier-browse', 'courier-active', 'credits', 'profile'
 
+  // Unsaved admin edits, reported by each admin form. Leaving the admin tab
+  // unmounts those forms, so tab switches, mode switches and logout ask first.
+  const [unsaved, setUnsaved] = useState({ accounts: false, suppliers: false });
+  const [pendingLeave, setPendingLeave] = useState(null);
+  const hasUnsaved = unsaved.accounts || unsaved.suppliers;
+  // Set once the admin has chosen to discard, so the reload prompt stays quiet.
+  const discardingRef = useRef(false);
+
+  const reportAccountsUnsaved = useCallback((value) => {
+    setUnsaved((current) => (current.accounts === value ? current : { ...current, accounts: value }));
+  }, []);
+  const reportSuppliersUnsaved = useCallback((value) => {
+    setUnsaved((current) => (current.suppliers === value ? current : { ...current, suppliers: value }));
+  }, []);
+
+  /** Runs `leave` now, or after the admin agrees to discard unsaved edits. */
+  const guardLeave = (leave) => {
+    if (hasUnsaved) setPendingLeave(() => leave);
+    else leave();
+  };
+
+  // A reload or tab close can only use the browser's own prompt.
+  useEffect(() => {
+    if (!hasUnsaved) {
+      discardingRef.current = false;
+      return undefined;
+    }
+    const warn = (event) => {
+      if (discardingRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [hasUnsaved]);
+
   // Data States
   const [suppliers] = useState(initialSuppliers);
   const [orders, setOrders] = useState(initialOrders);
@@ -880,14 +917,16 @@ export default function App() {
       {/* Top Navigation */}
       <Navbar
         role={role}
-        setRole={handleRoleChange}
+        setRole={(mode) => guardLeave(() => handleRoleChange(mode))}
         roleError={roleError}
         switchingRole={switchingRole}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          if (tab !== activeTab) guardLeave(() => setActiveTab(tab));
+        }}
         availableCredits={availableCredits}
         user={user}
-        onLogout={handleLogout}
+        onLogout={() => guardLeave(handleLogout)}
       />
 
       {/* Main Sections */}
@@ -957,11 +996,34 @@ export default function App() {
         )}
         {activeTab === "admin" && (
           <>
-            <AdminSection token={accessToken} currentUserId={user.id} />
-            <SupplierAdminSection token={accessToken} />
+            <AdminSection
+              token={accessToken}
+              currentUserId={user.id}
+              onUnsavedChange={reportAccountsUnsaved}
+            />
+            <SupplierAdminSection
+              token={accessToken}
+              onUnsavedChange={reportSuppliersUnsaved}
+            />
           </>
         )}
       </main>
+
+      {pendingLeave && (
+        <ConfirmDialog
+          title="Discard unsaved changes?"
+          message="You have unsaved admin changes. They will be lost if you leave this page."
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          onConfirm={() => {
+            const leave = pendingLeave;
+            discardingRef.current = true;
+            setPendingLeave(null);
+            leave();
+          }}
+          onCancel={() => setPendingLeave(null)}
+        />
+      )}
 
       {/* Order Creation Modal */}
       <CreateOrderModal
