@@ -20,7 +20,11 @@ import PhotoCropper from "./PhotoCropper";
 import PlaceTreeSelect from "./PlaceTreeSelect";
 
 const AUDIT_PAGE_SIZE = 10;
-const LIST_PAGE_SIZE = 100;
+// The list is searched and paged by the service, like public browsing, so
+// every supplier stays reachable however many there are.
+const LIST_PAGE_SIZE = 20;
+// Wait for a pause in typing, so one search is sent instead of one per key.
+const SEARCH_DELAY_MS = 300;
 // Mirrors the service's limit so an oversized file is refused before uploading.
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
@@ -175,9 +179,16 @@ function changedFields(form, supplier) {
 }
 
 export default function SupplierAdminSection({ token, onUnsavedChange }) {
+  // One page of the admin list, not every supplier.
   const [suppliers, setSuppliers] = useState([]);
+  const [listPage, setListPage] = useState(1);
+  const [listTotal, setListTotal] = useState(0);
+  const [search, setSearch] = useState("");
   const [places, setPlaces] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  // Kept apart from the page, so paging or searching away does not drop the
+  // supplier being edited.
+  const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({ ...blankSupplier });
   // Only edits and deletions carry a reason; creating a record does not.
   const [reason, setReason] = useState("");
@@ -197,26 +208,44 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
   // Where the admin tried to go with unsaved edits; set while the dialog is open.
   const [discardTarget, setDiscardTarget] = useState(null);
 
-  const selected = suppliers.find((supplier) => supplier.id === selectedId) || null;
   const isNew = selectedId === null;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearch(filter.trim());
+      setListPage(1);
+    }, SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [filter]);
 
   useEffect(() => {
     let active = true;
     // include_inactive so a hidden supplier can be found and restored.
-    Promise.all([
-      fetchSuppliers({ token, pageSize: LIST_PAGE_SIZE, includeInactive: true }),
-      fetchPlaces({ token }),
-    ])
-      .then(([page, placeRows]) => {
+    fetchSuppliers({
+      token, search, page: listPage, pageSize: LIST_PAGE_SIZE, includeInactive: true,
+    })
+      .then((page) => {
         if (!active) return;
         setSuppliers(page.items);
-        setPlaces(placeRows);
+        setListTotal(page.total);
         setForbidden(false);
       })
       .catch((loadError) => {
         if (!active) return;
         if (loadError.status === 403) setForbidden(true);
         else setError(loadError.message);
+      });
+    return () => { active = false; };
+  }, [token, refresh, search, listPage]);
+
+  useEffect(() => {
+    let active = true;
+    fetchPlaces({ token })
+      .then((placeRows) => {
+        if (active) setPlaces(placeRows);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message);
       });
     return () => { active = false; };
   }, [token, refresh]);
@@ -240,13 +269,6 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
     return () => { active = false; };
   }, [token, auditPage, refresh]);
 
-  const visible = useMemo(() => {
-    const needle = filter.trim().toLowerCase();
-    return suppliers.filter((supplier) => !needle
-      || supplier.name.toLowerCase().includes(needle)
-      || formatPlace(supplier.place).toLowerCase().includes(needle));
-  }, [suppliers, filter]);
-
   const changes = selected ? changedFields(form, selected) : {};
   // The photo as last saved, so an unsaved removal or replacement can be shown
   // as pending and undone. A new supplier has nothing saved yet.
@@ -260,7 +282,8 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
     : Object.keys(changes).length > 0;
   // The combination the unique index refuses, caught before the save so the
   // admin sees the cause rather than a 409. Must match the index expression:
-  // capitals, spaces and punctuation are ignored when comparing names.
+  // capitals, spaces and punctuation are ignored when comparing names. Only
+  // the loaded page is checked; the service's 409 covers the rest.
   const nameClash = suppliers.some((supplier) =>
     supplier.id !== selectedId
     && nameKey(supplier.name) === nameKey(form.name)
@@ -278,10 +301,9 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
 
   // Stored values are ids, codes and flags. Resolve them against what is
   // already loaded so the log reads the way the form does.
-  const names = useMemo(() => new Map([
-    ...places.map((place) => [place.id, formatPlace(place)]),
-    ...suppliers.map((supplier) => [supplier.id, supplier.name]),
-  ]), [places, suppliers]);
+  const names = useMemo(() => new Map(
+    places.map((place) => [place.id, formatPlace(place)]),
+  ), [places]);
 
   const describe = (field, value) => {
     if (field === "place_id" || field === "parent_id") {
@@ -312,6 +334,7 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
   const openSupplier = (supplier) => {
     setDiscardTarget(null);
     setSelectedId(supplier?.id ?? null);
+    setSelected(supplier ?? null);
     setPendingPhoto(null);
     setForm(supplierForm(supplier));
     setError("");
@@ -345,10 +368,11 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
       return run(async () => {
         const created = await createSupplier({ token, supplier: toPayload(form) });
         setSelectedId(created.id);
+        setSelected(created);
       }, "Supplier created.");
     }
     return run(async () => {
-      await updateSupplier({ token, supplierId: selected.id, changes, reason });
+      setSelected(await updateSupplier({ token, supplierId: selected.id, changes, reason }));
       setReason("");
     }, "Supplier saved.");
   };
@@ -356,14 +380,14 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
   const toggleActive = () => {
     if (selected.is_active) {
       return run(async () => {
-        await deactivateSupplier({ token, supplierId: selected.id, reason });
+        setSelected(await deactivateSupplier({ token, supplierId: selected.id, reason }));
         setReason("");
       }, "Supplier hidden from browsing.");
     }
     return run(async () => {
-      await updateSupplier({
+      setSelected(await updateSupplier({
         token, supplierId: selected.id, changes: { is_active: true }, reason,
-      });
+      }));
       setReason("");
     }, "Supplier restored.");
   };
@@ -454,12 +478,13 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
   }
 
   const auditPageCount = Math.max(1, Math.ceil(auditTotal / AUDIT_PAGE_SIZE));
+  const listPageCount = Math.max(1, Math.ceil(listTotal / LIST_PAGE_SIZE));
 
   return (
     <section>
       <div className="section-header">
         <h2>Supplier Records</h2>
-        <span className="section-count">{suppliers.length} total</span>
+        <span className="section-count">{listTotal} {search ? "found" : "total"}</span>
       </div>
       {error && <div className="action-error" role="alert">{error}</div>}
       {message && <div className="success-message" role="status">{message}</div>}
@@ -469,14 +494,14 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
           <h3>Suppliers</h3>
           <div className="form-group">
             <input
-              aria-label="Filter suppliers"
-              placeholder="Filter by name or location…"
+              aria-label="Search suppliers"
+              placeholder="Search by name, location or tag…"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
             />
           </div>
           <ul className="supplier-admin-list">
-            {visible.map((supplier) => (
+            {suppliers.map((supplier) => (
               <li key={supplier.id}>
                 <button
                   type="button"
@@ -490,8 +515,29 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
                 </button>
               </li>
             ))}
-            {visible.length === 0 && <li><small>No suppliers match that filter.</small></li>}
+            {suppliers.length === 0 && <li><small>No suppliers match that filter.</small></li>}
           </ul>
+          {listPageCount > 1 && (
+            <nav className="audit-pagination" aria-label="Supplier list pages">
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={listPage <= 1}
+                onClick={() => setListPage((page) => page - 1)}
+              >
+                Previous
+              </button>
+              <span>Page {listPage} of {listPageCount}</span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                disabled={listPage >= listPageCount}
+                onClick={() => setListPage((page) => page + 1)}
+              >
+                Next
+              </button>
+            </nav>
+          )}
         </div>
 
         <div className="card">
