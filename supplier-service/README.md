@@ -213,8 +213,8 @@ venue inside one.
   is inside Yusof Ishak House. A supplier points at its most specific place, and
   filtering by a parent also returns suppliers in its children — so a user can
   filter by either the building or the food court.
-- **A food court or canteen is a place; each stall in it is a supplier.** Wok
-  Express is a supplier at Central Square, not a supplier called "Central
+- **A food court or canteen is a place; each stall in it is a supplier.** A
+  stall at Central Square is a supplier there, not a supplier called "Central
   Square". A standalone shop sits directly in its building.
 - **`search_key`** is `name` with case, spaces, and punctuation removed
   (`COM 2` → `com2`). Incoming text is matched against it, so a typed variant
@@ -244,10 +244,10 @@ that field rather than repeat the rule. It is not a plain range comparison:
   Saturday is.
 
 **Known limitation:** different hours on different days cannot be expressed.
-Central Square's stalls close at 14:30 on Saturdays, so they are stored as
-Monday to Friday only — showing a stall as open when it is shut is worse than
-missing its Saturday hours. Anna's x Soup Union is stored as Monday to Saturday
-08:30–18:00 although it closes at 17:00 on Saturdays. If more suppliers need
+Anna's x Soup Union is stored as Monday to Saturday 08:30–18:00 although it
+closes at 17:00 on Saturdays. Where the hours differ more, store only the days
+that match — showing a supplier as open when it is shut is worse than missing
+some of its hours. If more suppliers need
 per-day hours, replace the single range with a row per day.
 
 ## Images
@@ -304,7 +304,7 @@ added without a schema change.
 Tags exist because a category alone cannot express something like coffee.
 Coffee shops _are_ food and beverage, so making `COFFEE` a fourth category
 would drop them out of a food search. As a tag, both work: `FOOD_BEVERAGE`
-returns all 21 food suppliers, `coffee` narrows to the 6 that serve it.
+returns all 21 food suppliers, `coffee` narrows to the 8 that serve it.
 
 In the CSV, `Type` holds the category and `Tags` is a semicolon-separated list
 (`coffee;halal`); blank means none. Tags are stored lowercase, so `Coffee` and
