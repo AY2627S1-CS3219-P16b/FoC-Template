@@ -34,7 +34,7 @@ class PlaceNormalizationTests(unittest.TestCase):
 
     def test_csv_matches_authored_names(self):
         rows = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(len(rows), 31)
+        self.assertEqual(len(rows), 54)
         instachef = next(row for row in rows if row["name"] == "InstaChef")
         self.assertEqual(instachef["place_key"], "com3")
         self.assertEqual(instachef["location_description"], "Beside Terrace, near the foyer")
@@ -43,7 +43,9 @@ class PlaceNormalizationTests(unittest.TestCase):
         self.assertIsNone(smooy["location_description"])
         self.assertEqual(smooy["operating_days"], ["MON", "TUE", "WED", "THU", "FRI"])
         self.assertEqual(sum(row["place_key"] == "com2" for row in rows), 2)
-        self.assertEqual(sum(row["place_key"] == "princegeorgespark" for row in rows), 3)
+        self.assertEqual(sum(row["place_key"] == "princegeorgespark" for row in rows), 4)
+        # Food court stalls point at the food court, not the building around it.
+        self.assertEqual(sum(row["place_key"] == "centralsquare" for row in rows), 4)
         names = {row["search_key"]: row["name"] for row in canonical_place_records()}
         self.assertEqual(names["com2"], "COM2")
         self.assertEqual(names["princegeorgespark"], "Prince George's Park")
@@ -111,13 +113,13 @@ class PlaceDatabaseTests(unittest.TestCase):
 
     def test_import_matching_constraints_and_preservation(self):
         records = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(seed(self.db, records), (31, 31))
-        self.assertEqual(seed(self.db, records), (0, 31))
+        self.assertEqual(seed(self.db, records), (54, 54))
+        self.assertEqual(seed(self.db, records), (0, 54))
         with self.db.begin() as connection:
-            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 14)
-            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Central Square", 0),
-                                    ("Yusof Ishak House", 3), ("UTown", 10),
-                                    ("Prince George’s Park", 3), ("Prince George's Park", 3)):
+            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 24)
+            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Central Square", 4),
+                                    ("Yusof Ishak House", 4), ("UTown", 16),
+                                    ("Prince George’s Park", 4), ("Prince George's Park", 4)):
                 count = connection.scalar(select(func.count()).select_from(
                     suppliers.join(places)
                 ).where(places.c.search_key == normalize_place_name(value)))
@@ -179,7 +181,7 @@ class PlaceDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 name="Edited supplier", is_active=False
             ))
-        self.assertEqual(seed(self.db, records), (0, 31))
+        self.assertEqual(seed(self.db, records), (0, 54))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["name"], "Edited supplier")

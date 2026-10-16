@@ -30,3 +30,26 @@ Starbucks,FOOD_BEVERAGE,coffee,UTown,,,,,0000hrs,2359hrs,/images/suppliers/starb
 The Coffee Bean & Tea Leaf,FOOD_BEVERAGE,coffee,COM3,,,,,0900hrs,1800hrs,/images/suppliers/coffee-bean-com3.webp,MON-FRI
 CHAGEE,FOOD_BEVERAGE,,Yusof Ishak House,1,,,,1030hrs,2030hrs,/images/suppliers/chagee-yih.webp,DAILY
 The Acai Truck,FOOD_BEVERAGE,,PGP Canteen,2,,,,1100hrs,1930hrs,/images/suppliers/the-acai-truck.webp,MON-FRI
+Hwang's Korean Restaurant,FOOD_BEVERAGE,,UTown,,,,,1030hrs,2100hrs,/images/suppliers/hwangs-utown.webp,MON-SAT
+Jollibee,FOOD_BEVERAGE,,UTown,,,,,0900hrs,2100hrs,/images/suppliers/jollibee-utown.webp,DAILY
+Makan Malah!,FOOD_BEVERAGE,,UTown,,,,,1100hrs,2130hrs,/images/suppliers/makan-malah-utown.webp,DAILY
+Udon Don Bar,FOOD_BEVERAGE,,UTown,,,,,1100hrs,2130hrs,/images/suppliers/udon-don-bar-utown.webp,DAILY
+The Royals Bistro,FOOD_BEVERAGE,,UTown,,,,,1100hrs,2000hrs,/images/suppliers/the-royals-bistro-utown.webp,DAILY
+Potato Corner,FOOD_BEVERAGE,,Central Square,,,,,1100hrs,2000hrs,/images/suppliers/potato-corner-yih.webp,MON-SAT
+Nine Fresh,FOOD_BEVERAGE,,LT26,,Next to Frontier Non-Aircon Canteen,,,1100hrs,1830hrs,/images/suppliers/nine-fresh-lt26.webp,MON-FRI
+Wild Skew,FOOD_BEVERAGE,,Yusof Ishak House,2,,,,1130hrs,2130hrs,/images/suppliers/wild-skew-yih.webp,MON-SAT
+Bismillah Biryani,FOOD_BEVERAGE,,UTown,,,,,1130hrs,1945hrs,/images/suppliers/bismillah-biryani-utown.webp,MON-SAT
+Wok Express,FOOD_BEVERAGE,,Central Square,,,,,1000hrs,2100hrs,/images/suppliers/wok-express-yih.webp,DAILY
+Tempu Ramen,FOOD_BEVERAGE,,Central Square,,,,,1000hrs,2100hrs,/images/suppliers/tempu-ramen-yih.webp,DAILY
+Makan Boleh,FOOD_BEVERAGE,,COM3,,,,,1000hrs,1600hrs,/images/suppliers/makan-boleh-com3.webp,MON-FRI
+Mini Wok & Dim Sum,FOOD_BEVERAGE,,Central Square,,,,,1000hrs,2100hrs,/images/suppliers/mini-wok-dim-sum-yih.webp,DAILY
+Fong Seng Nasi Lemak,FOOD_BEVERAGE,,The Deck,2,,,,0800hrs,1700hrs,/images/suppliers/fong-seng-the-deck.webp,MON-FRI
+Burnt Cones,FOOD_BEVERAGE,,University Hall,,,,,0800hrs,1930hrs,/images/suppliers/burnt-cones-uhall.webp,MON-FRI
+Arise & Shine,FOOD_BEVERAGE,,Engineering Block E4,,,,,0800hrs,1800hrs,/images/suppliers/arise-and-shine-e4.webp,MON-FRI
+Bakehaus / Aurea,FOOD_BEVERAGE,,The Ridge,,,,,0800hrs,2100hrs,/images/suppliers/bakehaus-aurea-the-ridge.webp,DAILY
+Sloppy B,FOOD_BEVERAGE,,University Sports Centre,,,,,1000hrs,2000hrs,/images/suppliers/sloppy-b-usc.webp,MON-FRI
+QQ Rice,FOOD_BEVERAGE,,Science Block S16,,,,,0730hrs,1900hrs,/images/suppliers/qq-rice-s16.webp,MON-FRI
+South & East,FOOD_BEVERAGE,,Shaw Foundation Alumni House,,,,,1130hrs,2200hrs,/images/suppliers/south-and-east-sfah.webp,MON-FRI
+SPX Locker,FACILITY,parcel,Stephen Riady Centre,1,Opposite Subway,,,0000hrs,2359hrs,/images/suppliers/spx-locker-src.webp,DAILY
+SPX Locker,FACILITY,parcel,Prince George's Park,,,,,0000hrs,2359hrs,,DAILY
+SPX Locker,FACILITY,parcel,UTown Residence,,North Tower,,,0000hrs,2359hrs,/images/suppliers/spx-locker-utown-residence.webp,DAILY
