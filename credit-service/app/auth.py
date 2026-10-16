@@ -6,12 +6,13 @@ User Service to authenticate a caller and never sees its private key.
 """
 
 import os
+from secrets import compare_digest
 from typing import Literal
 
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPublicKey
 import jwt
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ValidationError
 
@@ -79,3 +80,18 @@ def current_user(request: Request,
     if user.account_status != "ACTIVE":
         raise unauthorized()
     return user
+
+
+def service_auth(setting: str):
+    """Distinct credentials keep User Service from acting as Order Service."""
+    def require_service(x_service_key: str | None = Header(default=None)):
+        expected = os.getenv(setting)
+        if not expected:
+            raise HTTPException(503, "Service credential is not configured.")
+        if not x_service_key or not compare_digest(x_service_key.encode(), expected.encode()):
+            raise HTTPException(403, "This operation requires an authorized service.")
+    return require_service
+
+
+order_service = service_auth("ORDER_SERVICE_KEY")
+user_service = service_auth("USER_SERVICE_KEY")

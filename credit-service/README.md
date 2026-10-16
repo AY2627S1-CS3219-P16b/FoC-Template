@@ -13,7 +13,7 @@ the requester or transferred to the courier when the lifecycle ends.
 
 For installation, environment variables, database startup, and running the
 service alongside the rest of the application, follow the shared startup guide
-once Credit Service is added to `compose.yaml`. Paths below are relative to
+in `startup.md`. Paths below are relative to
 `credit-service/` unless stated otherwise.
 
 ## File responsibilities
@@ -25,20 +25,19 @@ once Credit Service is added to `compose.yaml`. Paths below are relative to
 | `app/credit_queries.py` | Atomic balance, reservation, transfer, and ledger operations     |
 | `app/schema.py`         | Credit tables, constraints, and indexes                          |
 | `app/auth.py`           | Verify callers through User Service JWTs                         |
-| `tests/`                | Balance, reservation, transfer, idempotency, and API tests       |
+| `app/allocation.py`     | Registration message deduplication and allocation              |
 
 ## API
 
-Interactive docs should run at <http://localhost:8002/docs> once the service is
-wired into Docker Compose. Click **Authorize** and paste the access token
+Interactive docs run at <http://localhost:8002/docs>. Click **Authorize** and paste the access token
 returned by User Service login, without the `Bearer` prefix.
 
 ### Authentication
 
-Credit endpoints should require `Authorization: Bearer <access_token>`, obtained
+User-facing credit endpoints require `Authorization: Bearer <access_token>`, obtained
 from User Service login. Tokens are verified locally using User Service's public
-key (`JWT_PUBLIC_KEY_PATH`). Credit Service should not hold the User Service
-private key and should not need to call User Service for every request.
+key (`JWT_PUBLIC_KEY_PATH`). Credit Service does not hold the User Service
+private key and does not call User Service for every request.
 
 | Status | Meaning                                               |
 | ------ | ----------------------------------------------------- |
@@ -48,7 +47,7 @@ private key and should not need to call User Service for every request.
 | `409`  | Insufficient credits, duplicate reservation, or invalid lifecycle transition |
 | `422`  | Invalid request body or parameter                     |
 
-### Expected endpoints
+### Endpoints
 
 | Endpoint                                           | Purpose                                  | Who |
 | -------------------------------------------------- | ---------------------------------------- | --- |
@@ -56,12 +55,20 @@ private key and should not need to call User Service for every request.
 | `POST /api/v1/credits/me/initialize`               | Create the caller's initial credit account if missing | user |
 | `GET /api/v1/credits/me`                           | Show caller's available and reserved balance | user |
 | `GET /api/v1/credits/me/ledger`                    | Show caller's credit transaction history | user |
-| `POST /api/v1/credits/reservations`                | Reserve credits for a new order          | requester or Order Service |
-| `POST /api/v1/credits/reservations/{order_id}/release` | Release held credits after cancellation or expiry | requester or Order Service |
-| `POST /api/v1/credits/reservations/{order_id}/transfer` | Transfer held credits to the courier after completion | requester or Order Service |
+| `POST /api/v1/credits/reservations`                | Reserve credits for a new order          | Order Service |
+| `POST /api/v1/credits/reservations/{order_id}/release` | Release held credits after cancellation or expiry | Order Service |
+| `POST /api/v1/credits/reservations/{order_id}/transfer` | Transfer held credits to the courier after completion | Order Service |
 
-Order Service is the intended caller for lifecycle mutations once it exists. A
-direct authenticated API is still useful for early development and testing.
+Lifecycle mutations require `X-Service-Key: <ORDER_SERVICE_KEY>` and
+`requester_user_id` in the JSON body. Reserve also takes `order_id` and `amount`;
+transfer also takes `courier_user_id`. Release now requires a JSON body.
+`GET /api/v1/credits/reservations/{order_id}` uses the same service credential
+and supports reconciliation after an uncertain response. User JWTs cannot mutate
+reservations. Order Service must enforce order ownership, assigned courier and
+valid order states before calling Credit Service.
+
+`POST /internal/events/user-registered` accepts only `USER_SERVICE_KEY` in
+`X-Service-Key`. Keep these two credentials distinct, out of the frontend and Git.
 
 ## Schema
 
@@ -150,7 +157,7 @@ RESERVED -> TRANSFERRED
 | `idempotency_key`          | text        | unique key for safe retries, when provided             |
 | `created_at`               | timestamptz |                                                        |
 
-Ledger entries are append-only records of credit movements. They should be
+Ledger entries are append-only records of credit movements. They are
 written in the same transaction as the balance or reservation update they
 describe.
 
@@ -170,10 +177,14 @@ because each row shows the account state immediately after that movement.
 
 ## Credit lifecycle
 
-When a user registers, Credit Service should create a credit account with the
-initial allocation, for example 20 available credits and 0 reserved credits.
-This may be triggered directly by the frontend during early development, or by
-an asynchronous user-created event once the event workflow is implemented.
+Registration saves a `credit_outbox` message in the same User Service
+transaction as the new user. The separate `user-credit-worker` delivers it to
+Credit Service, which atomically saves its `processed_events` marker, account
+and initial ledger entry. `INITIAL_CREDITS` defaults to **20**, enough for twenty
+one-credit errands. Existing users retain their allocation after configuration
+changes. Authenticated `/me/initialize` remains an idempotent recovery path for
+older users or delayed events. Reservation and transfer never create accounts
+for arbitrary user IDs.
 
 When a requester creates an order, Credit Service should reserve the required
 credits atomically:
@@ -205,7 +216,7 @@ requester ledger.type = CREDIT_TRANSFERRED_OUT
 courier ledger.type = CREDIT_TRANSFERRED_IN
 ```
 
-Each mutation should run inside a single database transaction. This is how the
+Each mutation runs inside a single database transaction. This is how the
 service satisfies the project requirement that credit reservation, release, and
 transfer are atomic.
 
@@ -220,19 +231,100 @@ transfer are atomic.
 - Ledger `idempotency_key` values are unique when supplied, so callers can retry
   safely without double-writing credit movements.
 
-## Additional tables
+## D3 integration and remaining work
 
-The three schema tables are enough for the core project requirements. For the
-asynchronous or event-driven requirement, add supporting tables only after the
-team finalizes the event workflow.
+PostgreSQL supports transactional balance/ledger updates, unique constraints and
+row locks for concurrent spending. Balance reads use the account primary key;
+ledger reads use the user/time index; reservations use unique `order_id`.
+Total balance is derived as `available_balance + reserved_balance`, avoiding a
+third balance that could drift. Reserved balance equals the sum of that user's
+`RESERVED` reservations. Release preserves total; transfer preserves the combined
+requester/courier total. Only initial allocation creates new credits.
 
-Useful additions later:
+Account insertion uses `ON CONFLICT DO NOTHING`, so concurrent initialization
+creates one allocation. A transaction-scoped advisory lock serializes each order,
+including its first reservation. Account row locks prevent overspending across
+orders; transfer locks both accounts in user-ID order to avoid deadlocks.
+Identical retries return the existing reservation. Changed amounts/requesters or
+incompatible terminal states return 409. Reusing a ledger idempotency key for a
+different operation also returns 409 and rolls back all balance changes.
 
-| Table               | Purpose                                                       |
-| ------------------- | ------------------------------------------------------------- |
-| `processed_events`  | Remember consumed event ids so duplicate messages are ignored |
-| `credit_outbox_events` | Store events to publish after a successful DB transaction  |
+### Asynchronous allocation
 
-Those tables are integration infrastructure, not part of the core credit model.
-Keeping them separate makes the credit balances and ledger easier to reason
-about.
+This is a message-based workflow over HTTP with a PostgreSQL transactional
+outbox as its durable queue. It avoids blocking registration on Credit Service
+availability without adding broker infrastructure. Delivery is at least once;
+`event_id` deduplicates delivery and the unique account ID prevents repeated
+allocation even with a different event ID. No ordering is needed between users.
+
+Example payload produced at registration:
+
+```json
+{"event_id":"registration-event-uuid","type":"user.registered.v1","user_id":"user-uuid","occurred_at":"2026-10-16T00:00:00+00:00"}
+```
+
+The worker polls every second with a five-second HTTP timeout. Failed delivery
+uses exponential backoff capped at 256 seconds, retaining every pending message.
+If the worker dies after Credit commits but before acknowledgement, the next
+attempt is a harmless duplicate. Database outages are retried. Worker logs show
+event ID, attempt, success/failure and HTTP error status; Credit logs duplicate
+processing. `credit_outbox` exposes `attempts`, `next_attempt_at`, `delivered_at`;
+`processed_events` records successful consumption. Persistent failures need an
+operator to fix credentials or service errors; messages are never discarded.
+
+### Order Service dependency — still required for D3
+
+Order Service currently has no implementation. Its owner must implement durable
+pending credit actions and retry/reconciliation, using this contract:
+
+| Trigger | Required sequence and recovery |
+| --- | --- |
+| Create | Persist a pending order/action; reserve credits; publish the order as open only after success. If creation is abandoned after reservation, retry release until acknowledged. |
+| Cancel/expire | Persist cancellation/expiry with a pending release; retry release until acknowledged. |
+| Complete | Persist completion with a pending transfer to the assigned courier; retry transfer until acknowledged. |
+| Timeout/crash | Inspect the reservation by order ID and retry the same operation. Keep pending actions until acknowledged. |
+
+Credit Service cannot decide whether an errand was actually completed, cancelled
+or expired. It must not automatically release old reservations because delivery
+may still be in progress. The existing frontend's local order actions now receive
+403 from credit mutations until replaced by real Order Service calls.
+End-to-end order recovery and Supplier integration are **not implemented** here.
+
+### Demo checklist
+
+1. Register two users, log in as each, and read `/api/v1/credits/me`: each gets
+   20 available, zero reserved, with one `INITIAL_ALLOCATION` ledger entry.
+2. As Order Service, reserve 7 credits with
+   `{"order_id":"demo","requester_user_id":"REQUESTER_ID","amount":7}`.
+   Requester balance becomes 13 available / 7 reserved. Repeat: no extra debit.
+3. Transfer with `{"requester_user_id":"REQUESTER_ID","courier_user_id":"COURIER_ID"}`:
+   requester becomes 13 / 0, courier becomes 27 / 0. Repeat: no extra transfer.
+   For a different order, reserve then release to demonstrate cancellation/expiry.
+4. Stop Credit Service, register another user, inspect pending outbox/logs, then
+   restart Credit Service and observe eventual allocation. Replay the same
+   message with User Service's credential: `duplicate: true`, no extra credits.
+5. Show a user token receiving 403 on reservation mutations.
+
+Run service API calls through Swagger at ports 8000 and 8002. Service keys are
+entered as the `X-Service-Key` header in Credit Swagger.
+
+### Containers and deployment
+
+Credit uses `python:3.12-slim`, installs `requirements.txt`, and starts Uvicorn on
+8002. The worker reuses the User Service image with its own startup command.
+PostgreSQL uses the Docker Official Image `postgres:17`. Compose service names
+provide internal DNS; ports are bound to loopback for local development. Database
+health checks gate startup, Credit's `/health` checks its database, and the worker
+and Credit restart after process failure. Connection pools check stale connections.
+
+Named database volumes survive stop/recreate; `down -v` deletes them. Startup's
+`metadata.create_all` adds the two new message tables without modifying existing
+tables. It is not a schema migration system: future column changes need explicit
+migrations. No credit seed data is required. Public JWT keys are mounted read-only;
+only User Service has the private key. Service credentials come from environment
+variables. The existing Compose database passwords remain local-development
+values; before claiming complete Part 4 compliance, externalize those passwords,
+freeze dependency versions and demonstrate external/internal network isolation.
+The containerized Order Service, full container demo and team N2H scope/owners
+also remain project-level D3 work. No container execution was verified while
+Docker was unavailable.

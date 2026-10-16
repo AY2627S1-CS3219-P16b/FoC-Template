@@ -75,7 +75,8 @@ class LedgerPageResponse(BaseModel):
 
 class ReserveCreditsRequest(StrictModel):
     order_id: str = Field(max_length=100)
-    amount: int = Field(gt=0)
+    amount: int = Field(gt=0, strict=True, le=2147483647)
+    requester_user_id: str = Field(min_length=1, max_length=100, pattern=r"\S")
     idempotency_key: str | None = Field(default=None, max_length=200)
 
     @field_validator("order_id")
@@ -90,6 +91,7 @@ class ReserveCreditsRequest(StrictModel):
 
 
 class ReleaseCreditsRequest(StrictModel):
+    requester_user_id: str = Field(min_length=1, max_length=100, pattern=r"\S")
     idempotency_key: str | None = Field(default=None, max_length=200)
 
     @field_validator("idempotency_key")
@@ -99,6 +101,7 @@ class ReleaseCreditsRequest(StrictModel):
 
 
 class TransferCreditsRequest(StrictModel):
+    requester_user_id: str = Field(min_length=1, max_length=100, pattern=r"\S")
     courier_user_id: str = Field(max_length=100)
     idempotency_key: str | None = Field(default=None, max_length=200)
 
@@ -111,3 +114,10 @@ class TransferCreditsRequest(StrictModel):
     @classmethod
     def validate_idempotency_key(cls, value: str | None) -> str | None:
         return strip_optional_text(value)
+
+
+class UserRegisteredEvent(StrictModel):
+    event_id: str = Field(min_length=1, max_length=100)
+    type: Literal["user.registered.v1"]
+    user_id: str = Field(min_length=1, max_length=100)
+    occurred_at: datetime

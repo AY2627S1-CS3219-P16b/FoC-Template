@@ -109,10 +109,13 @@ services:
 
   credit-service:
     build: ./credit-service
+    restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg://credit:credit_local_dev@credit-db:5432/credit_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       INITIAL_CREDITS: 20
+      USER_SERVICE_KEY: ${USER_SERVICE_KEY:?Set USER_SERVICE_KEY in .env}
+      ORDER_SERVICE_KEY: ${ORDER_SERVICE_KEY:?Set ORDER_SERVICE_KEY in .env}
     volumes:
       - type: bind
         source: ./user-service/keys/jwt-public.pem
@@ -126,11 +129,25 @@ services:
       credit-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/openapi.json', timeout=3)"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)"]
       interval: 5s
       timeout: 5s
       retries: 20
       start_period: 10s
+
+  user-credit-worker:
+    build: ./user-service
+    command: ["python", "-m", "app.credit_worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://user_service:user_service_local_dev@user-db:5432/user_db
+      CREDIT_SERVICE_URL: http://credit-service:8002
+      USER_SERVICE_KEY: ${USER_SERVICE_KEY:?Set USER_SERVICE_KEY in .env}
+    restart: unless-stopped
+    depends_on:
+      user-service:
+        condition: service_healthy
+      credit-service:
+        condition: service_healthy
 
   frontend:
     build: ./frontend

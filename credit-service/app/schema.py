@@ -102,3 +102,11 @@ credit_ledger_entries = Table(
 
 # Backwards-compatible alias while the service is still being built.
 credit_ledgers = credit_ledger_entries
+
+
+processed_events = Table(
+    "processed_events", metadata,
+    Column("event_id", String, primary_key=True),
+    Column("user_id", String, nullable=False),
+    Column("processed_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
+)

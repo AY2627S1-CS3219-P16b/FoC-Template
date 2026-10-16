@@ -1,12 +1,17 @@
+import logging
 from contextlib import asynccontextmanager
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request, status
-from sqlalchemy import text
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from sqlalchemy import text, select
+from sqlalchemy.exc import IntegrityError, OperationalError
+from fastapi.responses import JSONResponse
 
-from .auth import CurrentUser, current_user, load_jwt_public_key
+from .auth import CurrentUser, current_user, load_jwt_public_key, order_service, user_service
+from .allocation import consume_registration
 from .database import create_database_engine
-from .schema import metadata
+from .schema import metadata, credit_reservations
 from .api_schemas import (
+    UserRegisteredEvent,
     CreditBalanceResponse,
     LedgerPageResponse,
     ReleaseCreditsRequest,
@@ -51,9 +56,41 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    @app.exception_handler(IntegrityError)
+    async def integrity_error(request, error):
+        return JSONResponse(status_code=409, content={"detail": "Conflicting credit operation or balance constraint."})
+
+    @app.exception_handler(UserError)
+    async def missing_account(request, error):
+        return JSONResponse(status_code=404, content={"detail": str(error)})
+
     @app.get("/health")
-    async def health() -> dict[str, str]:
+    def health(request: Request) -> dict[str, str]:
+        try:
+            with request.app.state.database.connect() as connection:
+                connection.execute(text("SELECT 1"))
+        except OperationalError:
+            raise HTTPException(503, "Database unavailable.") from None
         return {"status": "ok"}
+
+    @app.post("/internal/events/user-registered", dependencies=[Depends(user_service)])
+    def user_registered(body: UserRegisteredEvent, request: Request):
+        with request.app.state.database.begin() as connection:
+            result = consume_registration(connection, body)
+        logging.getLogger("uvicorn.error").info(
+            "allocation event=%s duplicate=%s", body.event_id, result["duplicate"])
+        return result
+
+    @app.get("/api/v1/credits/reservations/{order_id}", response_model=ReservationResponse,
+             dependencies=[Depends(order_service)])
+    def read_reservation(order_id: str, request: Request):
+        """Let Order Service reconcile uncertain outcomes before retrying."""
+        with request.app.state.database.connect() as connection:
+            row = connection.execute(select(credit_reservations).where(
+                credit_reservations.c.order_id == order_id)).mappings().one_or_none()
+            if row is None:
+                raise HTTPException(404, "Reservation does not exist.")
+            return dict(row)
 
     @app.get("/api/v1/credits/me", response_model=CreditBalanceResponse)
     def get_credits(request: Request,
@@ -100,14 +137,14 @@ def create_app() -> FastAPI:
     def create_reservation(
         body: ReserveCreditsRequest,
         request: Request,
-        caller: CurrentUser = Depends(current_user),
+        _service=Depends(order_service),
     ):
         with request.app.state.database.begin() as connection:
             try:
                 return reserve_credits(
                     connection,
                     order_id=body.order_id,
-                    requester_user_id=caller.id,
+                    requester_user_id=body.requester_user_id,
                     amount=body.amount,
                     idempotency_key=body.idempotency_key,
                 )
@@ -129,17 +166,16 @@ def create_app() -> FastAPI:
     def release_credits(
         order_id: str,
         request: Request,
-        body: ReleaseCreditsRequest | None = Body(default=None),
-        caller: CurrentUser = Depends(current_user),
+        body: ReleaseCreditsRequest,
+        _service=Depends(order_service),
     ):
-        release_request = body or ReleaseCreditsRequest()
         with request.app.state.database.begin() as connection:
             try:
                 return release_reservation(
                     connection,
                     order_id=order_id,
-                    requester_user_id=caller.id,
-                    idempotency_key=release_request.idempotency_key,
+                    requester_user_id=body.requester_user_id,
+                    idempotency_key=body.idempotency_key,
                 )
             except ReservationNotFoundError as error:
                 raise HTTPException(
@@ -165,14 +201,14 @@ def create_app() -> FastAPI:
         order_id: str,
         body: TransferCreditsRequest,
         request: Request,
-        caller: CurrentUser = Depends(current_user),
+        _service=Depends(order_service),
     ):
         with request.app.state.database.begin() as connection:
             try:
                 return transfer_reservation(
                     connection,
                     order_id=order_id,
-                    requester_user_id=caller.id,
+                    requester_user_id=body.requester_user_id,
                     courier_user_id=body.courier_user_id,
                     idempotency_key=body.idempotency_key,
                 )

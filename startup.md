@@ -13,11 +13,25 @@ in the User Service setup below. Keep existing keys if they already exist.
 Compose mounts those files read-only; only User Service receives the private key.
 No Python/Node installation or service `.env` files are needed for this Docker path.
 
+Before first startup, create the ignored repository-root `.env` with two distinct
+random service credentials (never put these in frontend configuration):
+
+```dotenv
+USER_SERVICE_KEY=<random value from openssl rand -hex 32>
+ORDER_SERVICE_KEY=<another random value from openssl rand -hex 32>
+```
+
 From the repository root:
 
 ```bash
 docker compose up --build -d
 ```
+
+Credit Swagger runs at <http://localhost:8002/docs>. Registration now queues
+initial credit allocation; `user-credit-worker` retries delivery when Credit
+Service is unavailable. Inspect it with `docker compose logs user-credit-worker`.
+See [Credit Service](credit-service/README.md) for D3 coverage and remaining
+Order Service integration.
 
 Open the frontend at <http://localhost:5173>, User Service Swagger at
 <http://localhost:8000/docs>, and Supplier Service Swagger at

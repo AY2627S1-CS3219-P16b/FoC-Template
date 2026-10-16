@@ -4,7 +4,8 @@ from datetime import date, datetime, time
 import os
 from uuid import UUID, uuid4
 
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import func, insert, select, update, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
@@ -56,12 +57,9 @@ def _required_text(value: str | UUID, field_name: str) -> str:
 
 
 def _positive_amount(amount: int) -> int:
-    if isinstance(amount, bool):
+    if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
         raise ValueError("amount must be a positive integer")
-    amount_int = int(amount)
-    if amount_int <= 0:
-        raise ValueError("amount must be a positive integer")
-    return amount_int
+    return amount
 
 
 def _initial_credits() -> int:
@@ -88,23 +86,20 @@ def ensure_account(
 ) -> dict[str, object]:
     """Return the user's credit account, creating the initial allocation if needed."""
     user_id_text = _required_text(user_id, "user_id")
-    existing = connection.execute(
-        select(credit_accounts).where(credit_accounts.c.user_id == user_id_text)
-    ).mappings().one_or_none()
-    if existing is not None:
-        return dict(existing)
-
     starting_balance = _initial_credits() if initial_credits is None else initial_credits
-    if starting_balance < 0:
-        raise ValueError("initial_credits must be zero or greater")
+    if isinstance(starting_balance, bool) or not isinstance(starting_balance, int) or starting_balance < 0:
+        raise ValueError("initial_credits must be a non-negative integer")
 
-    connection.execute(
-        insert(credit_accounts).values(
-            user_id=user_id_text,
-            available_balance=starting_balance,
-            reserved_balance=0,
-        )
-    )
+    # The unique account key serializes concurrent initialization. Only the
+    # transaction that inserts the account may mint the allocation ledger row.
+    created = connection.execute(
+        pg_insert(credit_accounts).values(
+            user_id=user_id_text, available_balance=starting_balance, reserved_balance=0,
+        ).on_conflict_do_nothing(index_elements=["user_id"]).returning(credit_accounts.c.user_id)
+    ).scalar_one_or_none()
+    if created is None:
+        return get_account(connection, user_id_text)
+
     connection.execute(
         insert(credit_ledger_entries).values(
             id=str(uuid4()),
@@ -121,6 +116,12 @@ def ensure_account(
     return get_account(connection, user_id_text)
 
 
+def _lock_order(connection: Connection, order_id: str) -> None:
+    # A row lock cannot protect the first reservation because it does not exist yet.
+    connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+                       {"key": "credit-order:" + order_id})
+
+
 def reserve_credits(
     connection: Connection,
     order_id: str,
@@ -134,6 +135,7 @@ def reserve_credits(
     reservation for the order, and records the movement in the ledger.
     """
     order_id_text = _required_text(order_id, "order_id")
+    _lock_order(connection, order_id_text)
     requester_user_id_text = _required_text(requester_user_id, "requester_user_id")
     amount_int = _positive_amount(amount)
 
@@ -154,12 +156,13 @@ def reserve_credits(
             f"Credit reservation already exists for order {order_id_text}."
         )
 
-    ensure_account(connection, requester_user_id_text)
     account = connection.execute(
         select(credit_accounts)
         .where(credit_accounts.c.user_id == requester_user_id_text)
         .with_for_update()
-    ).mappings().one()
+    ).mappings().one_or_none()
+    if account is None:
+        raise UserError("Requester credit account has not been initialized.")
 
     available_balance = account["available_balance"]
     reserved_balance = account["reserved_balance"]
@@ -260,6 +263,7 @@ def release_reservation(
 ) -> dict[str, object]:
     """Release reserved credits after an order is cancelled or expires."""
     order_id_text = _required_text(order_id, "order_id")
+    _lock_order(connection, order_id_text)
     requester_user_id_text = _required_text(requester_user_id, "requester_user_id")
 
     reservation = connection.execute(
@@ -343,6 +347,7 @@ def transfer_reservation(
 ) -> dict[str, object]:
     """Transfer reserved credits from requester to courier after completion."""
     order_id_text = _required_text(order_id, "order_id")
+    _lock_order(connection, order_id_text)
     requester_user_id_text = _required_text(requester_user_id, "requester_user_id")
     courier_user_id_text = _required_text(courier_user_id, "courier_user_id")
     if requester_user_id_text == courier_user_id_text:
@@ -368,22 +373,19 @@ def transfer_reservation(
             f"Cannot transfer a reservation with status {reservation['status']}."
         )
 
-    requester_account = connection.execute(
+    # Both users can request and deliver errands simultaneously. Always lock
+    # their accounts in the same order to avoid reciprocal-transfer deadlocks.
+    accounts = connection.execute(
         select(credit_accounts)
-        .where(credit_accounts.c.user_id == requester_user_id_text)
+        .where(credit_accounts.c.user_id.in_([requester_user_id_text, courier_user_id_text]))
+        .order_by(credit_accounts.c.user_id)
         .with_for_update()
-    ).mappings().one_or_none()
-    if requester_account is None:
-        raise UserError(f"Credit account does not exist for user {requester_user_id_text}.")
-
-    ensure_account(connection, courier_user_id_text)
-    courier_account = connection.execute(
-        select(credit_accounts)
-        .where(credit_accounts.c.user_id == courier_user_id_text)
-        .with_for_update()
-    ).mappings().one_or_none()
-    if courier_account is None:
-        raise UserError(f"Credit account does not exist for user {courier_user_id_text}.")
+    ).mappings().all()
+    by_user = {account["user_id"]: account for account in accounts}
+    if len(by_user) != 2:
+        raise UserError("Requester and courier credit accounts must both be initialized.")
+    requester_account = by_user[requester_user_id_text]
+    courier_account = by_user[courier_user_id_text]
 
     amount = reservation["amount"]
     if requester_account["reserved_balance"] < amount:

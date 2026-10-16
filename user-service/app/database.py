@@ -89,6 +89,17 @@ admin_bootstrap = Table(
     Column("timestamp", String, nullable=False),
 )
 
+# Durable registration messages are committed in the same transaction as users.
+credit_outbox = Table(
+    "credit_outbox", metadata,
+    Column("event_id", String, primary_key=True),
+    Column("user_id", String, ForeignKey("users.id"), nullable=False, unique=True),
+    Column("occurred_at", String, nullable=False),
+    Column("delivered_at", String, nullable=True),
+    Column("attempts", Integer, nullable=False, server_default="0"),
+    Column("next_attempt_at", String, nullable=True),
+)
+
 profile_columns = (
     users.c.id,
     users.c.email,
@@ -124,6 +135,9 @@ class Database:
         try:
             with self.engine.begin() as connection:
                 connection.execute(users.insert().values(**user))
+                connection.execute(credit_outbox.insert().values(
+                    event_id=str(uuid4()), user_id=user["id"], occurred_at=user["created_at"],
+                ))
                 row = connection.execute(
                     select(*profile_columns).where(users.c.id == user["id"])
                 ).one()
