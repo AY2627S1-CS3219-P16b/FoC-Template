@@ -6,6 +6,7 @@ import {
   listAdminAuditLogs,
   listUsers,
 } from "../api/users";
+import ConfirmDialog from "./ConfirmDialog";
 
 function profileForm(user) {
   return {
@@ -51,6 +52,8 @@ export default function AdminSection({ token, currentUserId }) {
   const [fieldErrors, setFieldErrors] = useState({});
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  // The account the admin tried to open with unsaved edits; set while the dialog is open.
+  const [discardTargetId, setDiscardTargetId] = useState(null);
   const selected = accounts.find((account) => account.id === selectedId);
   const profileChanges = selected ? Object.fromEntries(
     Object.entries(form).filter(([name, value]) => value !== (selected[name] ?? "")),
@@ -158,6 +161,25 @@ export default function AdminSection({ token, currentUserId }) {
     }
   };
 
+  const openAccount = (id) => {
+    setDiscardTargetId(null);
+    setSelectedId(id);
+    // The reason explains one change to one account; it must not carry over.
+    setReason("");
+    setFieldErrors({});
+    setError("");
+    setMessage("");
+  };
+
+  const selectAccount = (id) => {
+    if (id === selectedId) return;
+    if (hasChanges) {
+      setDiscardTargetId(id);
+      return;
+    }
+    openAccount(id);
+  };
+
   const input = (label, name) => (
     <div className="form-group">
       <label htmlFor={`admin-${name}`}>{label}</label>
@@ -203,7 +225,7 @@ export default function AdminSection({ token, currentUserId }) {
               disabled={busy}
               className={`btn ${selectedId === account.id ? "btn-primary" : "btn-secondary"} btn-sm`}
               style={{ display: "block", marginBottom: "8px", textAlign: "left", width: "100%" }}
-              onClick={() => { setSelectedId(account.id); setError(""); setMessage(""); }}
+              onClick={() => selectAccount(account.id)}
             >
               {account.display_name} · {account.email}<br />
               {account.auth_role} · {account.account_status}
@@ -312,6 +334,16 @@ export default function AdminSection({ token, currentUserId }) {
           </nav>
         )}
       </div>
+      {discardTargetId && (
+        <ConfirmDialog
+          title="Discard unsaved changes?"
+          message={`Your changes to ${selected?.display_name || "this account"} have not been saved. They will be lost if you continue.`}
+          confirmLabel="Discard changes"
+          cancelLabel="Keep editing"
+          onConfirm={() => openAccount(discardTargetId)}
+          onCancel={() => setDiscardTargetId(null)}
+        />
+      )}
     </section>
   );
 }
