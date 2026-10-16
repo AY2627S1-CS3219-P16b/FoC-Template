@@ -56,3 +56,20 @@ Exact prompt: `add a comment explaining the indexes`
 
 Added comments describing requester/courier listings, expiry queries, order
 history ordering, and the partial index for unfinished credit jobs.
+
+### Follow-up — Order Service authentication
+
+Exact prompt: `Fill out order schemas auth.py, reusing as much logic from other auth.py as possible`
+
+Adapted Supplier Service's `CurrentUser`, public-key loading, RS256 JWT
+verification, unauthorized response, and admin guard into
+`order-service/app/auth.py`. Removed supplier-specific admin-reason handling.
+Role mode passes through; order ownership and assignment checks remain the
+responsibility of order operations. Verification uses token claims, so later
+account changes are not observed until a new token is issued or the old one expires.
+
+Added `order-service/tests/test_auth.py`. All eight authentication tests passed
+using `PYTHONPATH=order-service /private/tmp/foc-d3-venv/bin/python -m unittest
+discover -s order-service/tests -p test_auth.py -v`. Tests cover accepted roles,
+admin access, rejected credentials/claims/signatures/algorithms, expiry, and key
+configuration. Human review remains pending.
