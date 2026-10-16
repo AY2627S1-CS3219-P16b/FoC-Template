@@ -37,7 +37,7 @@ class ClassificationTests(unittest.TestCase):
             validate_supplier_type("COFFEE")
         rows = read_suppliers(DEFAULT_CSV)
         self.assertEqual(Counter(row["supplier_type"] for row in rows),
-                         {"FOOD_BEVERAGE": 21, "RETAIL": 8, "FACILITY": 2})
+                         {"FOOD_BEVERAGE": 41, "RETAIL": 8, "FACILITY": 5})
         self.assertEqual(sum("coffee" in row["tags"] for row in rows), 8)
 
     def test_unknown_csv_type_is_not_silently_guessed(self):
@@ -92,11 +92,11 @@ class ClassificationDatabaseTests(unittest.TestCase):
 
     def test_category_tag_storage_and_constraints(self):
         records = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(seed(self.db, records), (31, 31))
+        self.assertEqual(seed(self.db, records), (54, 54))
         with self.db.begin() as connection:
             stored = connection.execute(select(suppliers)).mappings().all()
             self.assertEqual(Counter(row["supplier_type"] for row in stored),
-                             {"FOOD_BEVERAGE": 21, "RETAIL": 8, "FACILITY": 2})
+                             {"FOOD_BEVERAGE": 41, "RETAIL": 8, "FACILITY": 5})
             self.assertEqual(sum("coffee" in row["tags"] for row in stored), 8)
             from app.supplier_queries import list_suppliers
             for search in ("cof", "coffee", "COFFEE"):
@@ -124,7 +124,7 @@ class ClassificationDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 tags=["Admin Tag"], supplier_type="RETAIL"
             ))
-        self.assertEqual(seed(self.db, records), (0, 32))
+        self.assertEqual(seed(self.db, records), (0, 55))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["tags"], ["admin tag"])

@@ -304,7 +304,7 @@ added without a schema change.
 Tags exist because a category alone cannot express something like coffee.
 Coffee shops _are_ food and beverage, so making `COFFEE` a fourth category
 would drop them out of a food search. As a tag, both work: `FOOD_BEVERAGE`
-returns all 21 food suppliers, `coffee` narrows to the 8 that serve it.
+returns all 41 food suppliers, `coffee` narrows to the 8 that serve it.
 
 In the CSV, `Type` holds the category and `Tags` is a semicolon-separated list
 (`coffee;halal`); blank means none. Tags are stored lowercase, so `Coffee` and
