@@ -531,18 +531,6 @@ def get_order_history(
     }
 
 
-def check_database_health(connection: Connection) -> bool:
-    """Return whether SELECT 1 succeeds; use a dedicated health-check connection.
-
-    The endpoint should return HTTP 503 when this returns False. The caller
-    owns connection cleanup, including rollback after a failed statement.
-    """
-    try:
-        return connection.execute(text("SELECT 1")).scalar_one() == 1
-    except SQLAlchemyError:
-        return False
-
-
 def expire_open_orders(
     connection: Connection,
     *,
@@ -620,6 +608,73 @@ def get_pending_credit_jobs(
     pass
 
 
+def _finish_credit_job(
+    connection: Connection,
+    job_id: str,
+    finished_at: datetime,
+    error_code: str | None = None,
+) -> dict[str, object]:
+    """Finish a credit action and its order atomically; the caller commits."""
+    job_id = _required_text(job_id, "job_id")
+    if not isinstance(finished_at, datetime) or finished_at.utcoffset() is None:
+        raise ValueError("finished_at must be a timezone-aware datetime")
+    if error_code is not None:
+        error_code = _required_text(error_code, "error_code")
+        if len(error_code) > 100:
+            raise ValueError("error_code must be at most 100 characters")
+
+    transitions = {
+        ("RESERVE", "RESERVING"): "OPEN",
+        ("RELEASE", "CANCELLING"): "CANCELLED",
+        ("RELEASE", "EXPIRING"): "EXPIRED",
+        ("TRANSFER", "COMPLETING"): "COMPLETED",
+    }
+    with connection.begin_nested():
+        # Lock both records so completion, rejection and retries cannot race.
+        job = connection.execute(
+            select(credit_jobs).join(orders, orders.c.id == credit_jobs.c.order_id)
+            .where(credit_jobs.c.id == job_id).with_for_update()
+        ).mappings().one_or_none()
+        if job is None:
+            raise LookupError("Credit job does not exist.")
+        order = connection.execute(
+            select(orders).where(orders.c.id == job["order_id"])
+        ).mappings().one()
+        if error_code is not None and job["operation"] != "RESERVE":
+            raise OrderStateError("Only RESERVE jobs can be definitively rejected.")
+        if job["completed_at"] is not None:
+            if (error_code is None) != (job["last_error_code"] is None):
+                raise OrderStateError("Credit job already finished with a different outcome.")
+            return dict(order)
+        next_status = transitions.get((job["operation"], order["status"]))
+        if next_status is None or (error_code is not None and order["status"] != "RESERVING"):
+            raise OrderStateError("Credit job does not match the pending order state.")
+        if finished_at < max(job["created_at"], order["updated_at"]):
+            raise ValueError("finished_at cannot precede the job or latest order update")
+        next_status = "REJECTED" if error_code is not None else next_status
+
+        connection.execute(
+            update(credit_jobs).where(credit_jobs.c.id == job_id).values(
+                completed_at=finished_at, last_error_code=error_code,
+                attempts=credit_jobs.c.attempts + 1,
+            )
+        )
+        updated = connection.execute(
+            update(orders).where(orders.c.id == order["id"])
+            .values(status=next_status, updated_at=finished_at).returning(orders)
+        ).mappings().one()
+        connection.execute(
+            insert(order_log).values(
+                order_id=order["id"], actor_user_id=None,
+                action=f"CREDIT_{job['operation']}",
+                outcome="REJECTED" if error_code is not None else "SUCCEEDED",
+                previous_status=order["status"], new_status=next_status,
+                details={"job_id": job_id, "error_code": error_code}, created_at=finished_at,
+            )
+        )
+        return dict(updated)
+
+
 def complete_credit_job(
     connection: Connection,
     job_id: str,
@@ -631,7 +686,7 @@ def complete_credit_job(
     RESERVE makes OPEN; RELEASE makes CANCELLED or EXPIRED according to the
     pending state; TRANSFER makes COMPLETED. Repeated completion is harmless.
     """
-    pass
+    return _finish_credit_job(connection, job_id, completed_at)
 
 
 def reschedule_credit_job(
@@ -642,7 +697,29 @@ def reschedule_credit_job(
     last_error_code: str,
 ) -> None:
     """Record a failed attempt and schedule retry, preserving pending order state."""
-    pass
+    job_id = _required_text(job_id, "job_id")
+    last_error_code = _required_text(last_error_code, "last_error_code")
+    if len(last_error_code) > 100:
+        raise ValueError("last_error_code must be at most 100 characters")
+    if not isinstance(next_attempt_at, datetime) or next_attempt_at.utcoffset() is None:
+        raise ValueError("next_attempt_at must be a timezone-aware datetime")
+
+    with connection.begin_nested():
+        job = connection.execute(
+            select(credit_jobs).where(credit_jobs.c.id == job_id).with_for_update()
+        ).mappings().one_or_none()
+        if job is None:
+            raise LookupError("Credit job does not exist.")
+        if job["completed_at"] is not None:
+            return
+        if next_attempt_at < job["created_at"]:
+            raise ValueError("next_attempt_at cannot precede job creation")
+        connection.execute(
+            update(credit_jobs).where(credit_jobs.c.id == job_id).values(
+                attempts=credit_jobs.c.attempts + 1,
+                next_attempt_at=next_attempt_at, last_error_code=last_error_code,
+            )
+        )
 
 
 def reject_order_reservation(
@@ -656,4 +733,4 @@ def reject_order_reservation(
 
     Uncertain outcomes and temporary failures must be reconciled/retried instead.
     """
-    pass
+    return _finish_credit_job(connection, job_id, rejected_at, error_code)
