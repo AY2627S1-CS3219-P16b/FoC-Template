@@ -72,6 +72,11 @@ export default function CourierActiveSection({
               Order marked as delivered. Waiting for requester confirmation.
             </div>
           )}
+          {activeTask.status === 'COMPLETING' && (
+            <div className="notice-box" style={{ margin: 0 }}>
+              Receipt confirmed. Your credit reward is being processed.
+            </div>
+          )}
         </div>
       </div>
     </section>

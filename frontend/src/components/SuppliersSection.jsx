@@ -272,6 +272,7 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
                   <button
                     className="btn btn-primary btn-block"
                     onClick={() => onQuickOpenModal(supplier)}
+                    disabled={!supplier.is_active || !supplier.is_open_now}
                   >
                     Create Request
                   </button>

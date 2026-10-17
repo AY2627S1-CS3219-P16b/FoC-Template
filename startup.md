@@ -33,14 +33,16 @@ Service is unavailable. Inspect it with `docker compose logs user-credit-worker`
 See [Credit Service](credit-service/README.md) for D3 coverage and remaining
 Order Service integration. Order Swagger runs at <http://localhost:8003/docs>.
 Container readiness checks OpenAPI and its database directly.
-No order credit-job or expiry worker is implemented yet, so
-container startup does not demonstrate a complete order lifecycle.
+`order-worker` processes durable credit jobs and expires unaccepted orders.
+The frontend calls Order Service for order actions and polls order states and
+credit balances every five seconds. Only Order Service's worker mutates order
+credits. See [service integration](integration.md) for the complete request flow.
 
 Open the frontend at <http://localhost:5173>, User Service Swagger at
 <http://localhost:8000/docs>, and Supplier Service Swagger at
 <http://localhost:8001/docs>. This starts four databases, four APIs, the registration
-credit worker, and the Vite development frontend. Containers use database port
-5432 internally.
+credit worker, the order worker, and the Vite development frontend. Containers
+use database port 5432 internally.
 Database health checks run before the APIs start; the frontend waits for all APIs.
 Order data persists in `order-db-data`. Its database is available locally on
 port 5436; containers connect to `order-db:5432`. Order Service uses port 8003,
@@ -66,7 +68,7 @@ Useful commands:
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 user-service supplier-service credit-service order-service frontend
+docker compose logs --tail=100 user-service supplier-service credit-service order-service order-worker frontend
 docker compose stop
 ```
 

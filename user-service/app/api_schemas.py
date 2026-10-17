@@ -81,6 +81,10 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class RoleModeResponse(UserResponse):
+    access_token: str
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str

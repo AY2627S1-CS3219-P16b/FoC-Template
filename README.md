@@ -24,6 +24,9 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 ## Repository Structure
 
+See [service integration](integration.md) for the four-service workflow and
+[startup](startup.md) for local/container configuration.
+
 This repository follows a **one-service-per-folder** structure: each
 microservice (`user-service/`, `supplier-service/`, `order-service/`,
 `credit-service/`) lives in its own top-level folder.

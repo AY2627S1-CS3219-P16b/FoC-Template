@@ -1,5 +1,23 @@
 # AI usage log
 
+## 2026-10-17 — Order Service review and four-service integration
+
+- Tool: OpenAI Codex.
+- Prompts: "scan thru order service and ensure everything works and fits the requirements completely. you can simplify code and make things more concise in places if neeeded"; "remove all the tests u added"; "Ensure that all 4 services are integrated with teach other. specifically credit and order services."
+- Changes: completed the pending credit-job query and independent credit/expiry
+  worker; implemented reservation reconciliation, stable operation keys and
+  delayed-reservation expiry; simplified pagination, supplier validation and HTTP
+  error handling; wired the worker into Compose. Replaced frontend mock order
+  actions/direct reservation mutations with Order Service calls and polling.
+  Role switching now issues a fresh User Service JWT and the frontend stores it.
+- Documentation: added the Order Service README and root integration guide;
+  updated startup and credit integration notes.
+- Verification: source/configuration review only. No tests, builds, dependency
+  installation or containers were run. Test files added in this conversation
+  were removed as requested; pre-existing authentication tests were retained.
+- Human review: pending. Full assignment rubric is not present in the repository;
+  course-wide compliance and runtime behavior have not been independently verified.
+
 ## 2026-10-16 — Order Service schema
 
 - Tool: OpenAI Codex.

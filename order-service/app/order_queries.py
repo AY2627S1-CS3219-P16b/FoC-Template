@@ -1,4 +1,4 @@
-"""Order database operations; unfinished operations remain as skeletons.
+"""Transactional order operations and durable credit jobs.
 
 Endpoints supply user IDs from verified JWTs and enforce role mode. Operations
 must check ownership, assignment and lifecycle state. Mutations must write
@@ -13,7 +13,6 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import func, insert, or_, select, text, update
 from sqlalchemy.engine import Connection
-from sqlalchemy.exc import SQLAlchemyError
 
 from .schema import ORDER_STATUSES, credit_jobs, order_log, orders
 
@@ -41,6 +40,19 @@ def _required_text(value: str | UUID, field_name: str) -> str:
     if not text:
         raise ValueError(f"{field_name} must not be blank")
     return text
+
+
+def _page(connection: Connection, statement, page: int, page_size: int) -> dict[str, object]:
+    if type(page) is not int or page < 1:
+        raise ValueError("page must be a positive integer")
+    if type(page_size) is not int or not 1 <= page_size <= 100:
+        raise ValueError("page_size must be an integer between 1 and 100")
+    total = connection.execute(select(func.count()).select_from(
+        statement.order_by(None).subquery(),
+    )).scalar_one()
+    rows = connection.execute(statement.offset((page - 1) * page_size).limit(page_size)).mappings().all()
+    return {"items": [dict(row) for row in rows], "page": page, "page_size": page_size,
+            "total": total, "total_pages": (total + page_size - 1) // page_size}
 
 
 def create_order(
@@ -107,7 +119,9 @@ def create_order(
             )
         ).mappings().one_or_none()
         if existing is not None:
-            if any(existing[field] != value for field, value in values.items()):
+            # Supplier snapshots are server-owned and may change between retries.
+            if any(existing[field] != value for field, value in values.items()
+                   if field not in ("supplier_name", "pickup_location")):
                 raise OrderIdempotencyConflict(
                     "Idempotency key is already used for different order details."
                 )
@@ -159,11 +173,6 @@ def list_orders(
     status = _required_text(status, "status")
     if status not in ORDER_STATUSES:
         raise ValueError("status must be a valid order status")
-    if type(page) is not int or page < 1:
-        raise ValueError("page must be a positive integer")
-    if type(page_size) is not int or not 1 <= page_size <= 100:
-        raise ValueError("page_size must be an integer between 1 and 100")
-
     filters = [orders.c.status == status]
     if status == "OPEN":
         filters.append(orders.c.expires_at > func.statement_timestamp())
@@ -176,23 +185,11 @@ def list_orders(
         supplier_id = _required_text(supplier_id, "supplier_id")
         filters.append(orders.c.supplier_id == supplier_id)
 
-    total = connection.execute(
-        select(func.count()).select_from(orders).where(*filters)
-    ).scalar_one()
-    records = connection.execute(
+    return _page(connection,
         select(orders)
         .where(*filters)
-        .order_by(orders.c.created_at.desc(), orders.c.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).mappings().all()
-    return {
-        "items": [dict(record) for record in records],
-        "page": page,
-        "page_size": page_size,
-        "total": total,
-        "total_pages": (total + page_size - 1) // page_size,
-    }
+        .order_by(orders.c.created_at.desc(), orders.c.id.desc()), page, page_size,
+    )
 
 
 def get_user_orders(
@@ -214,11 +211,6 @@ def get_user_orders(
             raise ValueError("status must be a valid order status")
     if role not in {"requester", "courier"}:
         raise ValueError("role must be a valid role")
-    if type(page) is not int or page < 1:
-        raise ValueError("page must be a positive integer")
-    if type(page_size) is not int or not 1 <= page_size <= 100:
-        raise ValueError("page_size must be an integer between 1 and 100")
-
     owner_column = (
         orders.c.requester_user_id if role == "requester" else orders.c.courier_user_id
     )
@@ -226,23 +218,11 @@ def get_user_orders(
     if status is not None:
         filters.append(orders.c.status == status)
 
-    total = connection.execute(
-        select(func.count()).select_from(orders).where(*filters)
-    ).scalar_one()
-    records = connection.execute(
+    return _page(connection,
         select(orders)
         .where(*filters)
-        .order_by(orders.c.created_at.desc(), orders.c.id.desc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).mappings().all()
-    return {
-        "items": [dict(record) for record in records],
-        "page": page,
-        "page_size": page_size,
-        "total": total,
-        "total_pages": (total + page_size - 1) // page_size,
-    }
+        .order_by(orders.c.created_at.desc(), orders.c.id.desc()), page, page_size,
+    )
 
 
 def get_order_details(
@@ -282,6 +262,7 @@ def get_order_details(
         )
     return order
 
+
 def assign_courier(
     connection: Connection,
     order_id: str,
@@ -291,7 +272,7 @@ def assign_courier(
     """Atomically accept an unexpired OPEN order, excluding its requester.
 
     Lock the order until the caller's transaction ends. Update the assignment
-    and history together; an identical retry while ACCEPTED adds no new log.
+    and history together; successful retries at later stages add no new log.
     The endpoint must verify courier role mode and supply the JWT's user ID.
     """
     courier_user_id = _required_text(courier_user_id, "courier_user_id")
@@ -305,7 +286,8 @@ def assign_courier(
             raise OrderNotFoundError("Order does not exist.")
         if courier_user_id == order["requester_user_id"]:
             raise OrderAccessDeniedError("Requesters cannot accept their own orders.")
-        if order["status"] == "ACCEPTED" and order["courier_user_id"] == courier_user_id:
+        if (order["courier_user_id"] == courier_user_id and order["status"] in
+                ("ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETING", "COMPLETED")):
             return dict(order)
         if order["status"] != "OPEN" or order["courier_user_id"] is not None:
             raise OrderStateError("Only an unassigned OPEN order can be accepted.")
@@ -352,7 +334,8 @@ def _advance_courier_order(
             raise OrderNotFoundError("Order does not exist.")
         if order["courier_user_id"] != courier_user_id:
             raise OrderAccessDeniedError("Only the assigned courier can update this order.")
-        if order["status"] == next_status:
+        reached = ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETING", "COMPLETED"]
+        if order["status"] in reached[reached.index(next_status):]:
             return dict(order)
         if order["status"] != previous_status:
             raise OrderStateError(f"Order must be {previous_status} to move to {next_status}.")
@@ -495,11 +478,6 @@ def get_order_history(
     """Read chronological history for the requester or assigned courier."""
     order_id = _required_text(order_id, "order_id")
     viewer_user_id = _required_text(viewer_user_id, "viewer_user_id")
-    if type(page) is not int or page < 1:
-        raise ValueError("page must be a positive integer")
-    if type(page_size) is not int or not 1 <= page_size <= 100:
-        raise ValueError("page_size must be an integer between 1 and 100")
-
     order = connection.execute(
         select(orders.c.requester_user_id, orders.c.courier_user_id)
         .where(orders.c.id == order_id)
@@ -511,24 +489,11 @@ def get_order_history(
             "Only the requester or assigned courier can read order history."
         )
 
-    total = connection.execute(
-        select(func.count()).select_from(order_log)
-        .where(order_log.c.order_id == order_id)
-    ).scalar_one()
-    records = connection.execute(
+    return _page(connection,
         select(order_log)
         .where(order_log.c.order_id == order_id)
-        .order_by(order_log.c.created_at.asc(), order_log.c.id.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    ).mappings().all()
-    return {
-        "items": [dict(record) for record in records],
-        "page": page,
-        "page_size": page_size,
-        "total": total,
-        "total_pages": (total + page_size - 1) // page_size,
-    }
+        .order_by(order_log.c.created_at.asc(), order_log.c.id.asc()), page, page_size,
+    )
 
 
 def expire_open_orders(
@@ -602,10 +567,25 @@ def get_pending_credit_jobs(
 ) -> list[dict[str, object]]:
     """Read due unfinished jobs with order IDs, parties, amounts and operations.
 
-    Workers must coordinate processing and use stable credit idempotency keys
-    so concurrent delivery or retries cannot repeat a credit movement.
+    Lock the orders until the caller's transaction ends. Workers must send and
+    acknowledge each job within that transaction, using stable idempotency keys.
     """
-    pass
+    if not isinstance(now, datetime) or now.utcoffset() is None:
+        raise ValueError("now must be a timezone-aware datetime")
+    if type(batch_size) is not int or batch_size < 1:
+        raise ValueError("batch_size must be a positive integer")
+    rows = connection.execute(
+        select(
+            credit_jobs, orders.c.requester_user_id, orders.c.courier_user_id,
+            orders.c.credit_amount, orders.c.status.label("order_status"),
+        )
+        .join(orders, orders.c.id == credit_jobs.c.order_id)
+        .where(credit_jobs.c.completed_at.is_(None), credit_jobs.c.next_attempt_at <= now)
+        .order_by(credit_jobs.c.next_attempt_at, credit_jobs.c.created_at, credit_jobs.c.id)
+        .limit(batch_size)
+        .with_for_update(of=orders, skip_locked=True)
+    ).mappings().all()
+    return [dict(row) for row in rows]
 
 
 def _finish_credit_job(
@@ -630,15 +610,17 @@ def _finish_credit_job(
         ("TRANSFER", "COMPLETING"): "COMPLETED",
     }
     with connection.begin_nested():
-        # Lock both records so completion, rejection and retries cannot race.
         job = connection.execute(
-            select(credit_jobs).join(orders, orders.c.id == credit_jobs.c.order_id)
-            .where(credit_jobs.c.id == job_id).with_for_update()
+            select(credit_jobs).where(credit_jobs.c.id == job_id)
         ).mappings().one_or_none()
         if job is None:
             raise LookupError("Credit job does not exist.")
         order = connection.execute(
-            select(orders).where(orders.c.id == job["order_id"])
+            select(orders).where(orders.c.id == job["order_id"]).with_for_update()
+        ).mappings().one()
+        # Always lock order before job, matching the worker and API operations.
+        job = connection.execute(
+            select(credit_jobs).where(credit_jobs.c.id == job_id).with_for_update()
         ).mappings().one()
         if error_code is not None and job["operation"] != "RESERVE":
             raise OrderStateError("Only RESERVE jobs can be definitively rejected.")
@@ -652,6 +634,13 @@ def _finish_credit_job(
         if finished_at < max(job["created_at"], order["updated_at"]):
             raise ValueError("finished_at cannot precede the job or latest order update")
         next_status = "REJECTED" if error_code is not None else next_status
+        if next_status == "OPEN" and order["expires_at"] <= finished_at:
+            # A delayed reservation must never publish an already-expired order.
+            next_status = "EXPIRING"
+            connection.execute(insert(credit_jobs).values(
+                order_id=order["id"], operation="RELEASE", attempts=0,
+                next_attempt_at=finished_at, created_at=finished_at,
+            ))
 
         connection.execute(
             update(credit_jobs).where(credit_jobs.c.id == job_id).values(
@@ -683,8 +672,8 @@ def complete_credit_job(
 ) -> dict[str, object]:
     """After confirmed credit success, finish the job, order transition and log.
 
-    RESERVE makes OPEN; RELEASE makes CANCELLED or EXPIRED according to the
-    pending state; TRANSFER makes COMPLETED. Repeated completion is harmless.
+    RESERVE makes OPEN (or EXPIRING if already due); RELEASE makes CANCELLED or
+    EXPIRED; TRANSFER makes COMPLETED. Repeated completion is harmless.
     """
     return _finish_credit_job(connection, job_id, completed_at)
 

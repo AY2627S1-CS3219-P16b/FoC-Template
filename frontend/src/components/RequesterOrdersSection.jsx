@@ -22,7 +22,7 @@ export default function RequesterOrdersSection({
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <strong>Order {order.id} - {order.supplierName}</strong>
                 <span className={`badge badge-${order.status.toLowerCase().replace('_', '-')}`}>
-                  {order.status}
+                  {order.status.replaceAll('_', ' ')}
                 </span>
               </div>
 
@@ -34,8 +34,15 @@ export default function RequesterOrdersSection({
                 <strong>Courier:</strong> {order.courierName || 'Unassigned'}
               </div>
               <div style={{ marginBottom: '10px', fontSize: '12px', color: '#666666' }}>
-                Credits Reserved: {order.creditsReward} Credit | Created: {order.createdAt}
+                Reward: {order.creditsReward} Credit | Created: {order.createdAt}
               </div>
+
+              {['RESERVING', 'CANCELLING', 'EXPIRING', 'COMPLETING'].includes(order.status) && (
+                <div className="notice-box">Credit processing is pending. This request will update automatically.</div>
+              )}
+              {order.status === 'REJECTED' && (
+                <div className="action-error">Credits could not be reserved. Check your balance before creating another request.</div>
+              )}
 
               <div style={{ display: 'flex', gap: '8px' }}>
                 {order.status === 'OPEN' && (

@@ -72,13 +72,15 @@ export function updateUserProfile(token, userId, changes) {
   });
 }
 
-export function updateUserRoleMode(token, userId, roleMode) {
-  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}/role-mode`, {
+export async function updateUserRoleMode(token, userId, roleMode) {
+  const profile = await sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/users/${encodeURIComponent(userId)}/role-mode`, {
     token,
     method: "PATCH",
     data: { active_role_mode: roleMode },
     errorMessage: "Could not change your role mode.",
   });
+  localStorage.setItem("foc_access_token", profile.access_token);
+  return profile;
 }
 
 export function listUsers(token) {

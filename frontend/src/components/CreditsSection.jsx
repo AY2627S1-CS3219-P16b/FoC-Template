@@ -4,6 +4,7 @@ export default function CreditsSection({
   availableCredits,
   reservedCredits,
   transactions,
+  transactionCount,
   error
 }) {
   return (
@@ -31,7 +32,7 @@ export default function CreditsSection({
 
         <div className="stat-box">
           <div className="stat-label">Total Transactions</div>
-          <div className="stat-number">{transactions.length}</div>
+          <div className="stat-number">{transactionCount ?? transactions.length}</div>
         </div>
       </div>
 

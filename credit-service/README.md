@@ -272,10 +272,10 @@ processing. `credit_outbox` exposes `attempts`, `next_attempt_at`, `delivered_at
 `processed_events` records successful consumption. Persistent failures need an
 operator to fix credentials or service errors; messages are never discarded.
 
-### Order Service dependency — still required for D3
+### Order Service integration
 
-Order Service currently has no implementation. Its owner must implement durable
-pending credit actions and retry/reconciliation, using this contract:
+Order Service persists pending actions in its `credit_jobs` table and runs an
+independent `order-worker` for delivery and reconciliation, using this contract:
 
 | Trigger | Required sequence and recovery |
 | --- | --- |
@@ -286,9 +286,11 @@ pending credit actions and retry/reconciliation, using this contract:
 
 Credit Service cannot decide whether an errand was actually completed, cancelled
 or expired. It must not automatically release old reservations because delivery
-may still be in progress. The existing frontend's local order actions now receive
-403 from credit mutations until replaced by real Order Service calls.
-End-to-end order recovery and Supplier integration are **not implemented** here.
+may still be in progress. The frontend sends lifecycle actions to Order Service;
+only its worker can reserve, release or transfer credits. User JWTs receive 403
+on credit mutations. Order creation checks Supplier Service before persisting
+its pickup snapshot. See [Order Service](../order-service/README.md) and the
+[integration guide](../integration.md). Runtime verification remains pending.
 
 ### Demo checklist
 
@@ -325,6 +327,6 @@ only User Service has the private key. Service credentials come from environment
 variables. The existing Compose database passwords remain local-development
 values; before claiming complete Part 4 compliance, externalize those passwords,
 freeze dependency versions and demonstrate external/internal network isolation.
-The containerized Order Service, full container demo and team N2H scope/owners
-also remain project-level D3 work. No container execution was verified while
-Docker was unavailable.
+Order Service and its worker are configured in Compose. A full container demo
+and team N2H scope/owners remain project-level D3 work. Container execution has
+not been verified during this review.

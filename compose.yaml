@@ -180,6 +180,25 @@ services:
         condition: service_healthy
     # The image probes OpenAPI and PostgreSQL directly.
 
+  order-worker:
+    build: ./order-service
+    command: ["python", "-m", "app.worker"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    environment:
+      DATABASE_URL: postgresql+psycopg://order_service:order_service_local_dev@order-db:5432/order_db
+      CREDIT_SERVICE_URL: http://credit-service:8002
+      ORDER_SERVICE_KEY: ${ORDER_SERVICE_KEY:?Set ORDER_SERVICE_KEY in .env}
+    depends_on:
+      order-service:
+        condition: service_healthy
+      credit-service:
+        condition: service_healthy
+    # The API image's HTTP health probe does not apply to this worker process.
+    healthcheck:
+      disable: true
+
   user-credit-worker:
     build: ./user-service
     command: ["python", "-m", "app.credit_worker"]

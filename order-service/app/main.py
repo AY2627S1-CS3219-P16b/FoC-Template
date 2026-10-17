@@ -1,16 +1,13 @@
 """Order Service app setup and HTTP endpoints."""
 
 from contextlib import asynccontextmanager
-import json
 import os
-from urllib.error import HTTPError, URLError
-from urllib.parse import quote
-from urllib.request import Request as URLRequest, urlopen
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError, OperationalError
+from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from .auth import CurrentUser, current_user, load_jwt_public_key
 from .api_schemas import (
@@ -25,6 +22,7 @@ from .api_schemas import (
 )
 from .database import create_database_engine
 from .schema import metadata, orders
+from .service_clients import supplier_snapshot
 
 from . import order_queries as queries
 
@@ -56,13 +54,15 @@ def create_app() -> FastAPI:
         queries.OrderAccessDeniedError: (403, None),
         queries.OrderStateError: (409, None),
         queries.OrderIdempotencyConflict: (409, None),
+        ValidationError: (500, "Invalid service response."),
         ValueError: (422, None),
         IntegrityError: (409, "Conflicting order operation."),
         OperationalError: (503, "Database unavailable."),
     }
 
     async def query_error(request: Request, error: Exception) -> JSONResponse:
-        code, message = errors.get(type(error), (500, "Internal server error."))
+        code, message = next((config for cls, config in errors.items()
+                              if isinstance(error, cls)), (500, "Internal server error."))
         return JSONResponse(status_code=code, content={"detail": message or str(error)})
 
     for error_type in errors:
@@ -73,7 +73,7 @@ def create_app() -> FastAPI:
         try:
             with request.app.state.database.connect() as connection:
                 connection.execute(text("SELECT 1"))
-        except OperationalError:
+        except SQLAlchemyError:
             raise HTTPException(503, "Database unavailable.") from None
         return HealthResponse(status="ok")
 
@@ -88,69 +88,22 @@ def create_app() -> FastAPI:
         if caller.active_role_mode != "REQUESTER":
             raise HTTPException(403, "Switch to requester mode to create an order.")
 
-        try:
-            # Replays use the original supplier snapshot, even if it has changed
-            # or the supplier is now closed. The query checks the full payload.
-            with request.app.state.database.connect() as connection:
-                existing = connection.execute(
-                    select(orders).where(
-                        orders.c.requester_user_id == caller.id,
-                        orders.c.idempotency_key == idempotency_key,
-                    )
-                ).mappings().one_or_none()
-
-            if existing is not None:
-                supplier_name = existing["supplier_name"]
-                pickup_location = existing["pickup_location"]
-            else:
-                base_url = os.getenv("SUPPLIER_SERVICE_URL", "http://localhost:8001")
-                supplier_request = URLRequest(
-                    f"{base_url.rstrip('/')}/api/v1/suppliers/{quote(body.supplier_id, safe='')}",
-                    headers={"Authorization": request.headers["authorization"]},
-                )
-                try:
-                    with urlopen(supplier_request, timeout=5) as response:
-                        supplier = json.load(response)
-                except HTTPError as error:
-                    if error.code in (401, 403, 404, 422):
-                        raise HTTPException(error.code, "Supplier lookup was rejected.") from None
-                    raise HTTPException(502, "Supplier Service returned an error.") from None
-                except (URLError, TimeoutError):
-                    raise HTTPException(503, "Supplier Service is unavailable.") from None
-                except (json.JSONDecodeError, UnicodeError):
-                    raise HTTPException(502, "Supplier Service returned invalid JSON.") from None
-
-                try:
-                    supplier_name = supplier["name"]
-                    place = supplier["place"]
-                    pickup_location = ", ".join(filter(None, [
-                        place.get("parent_name"), place["name"],
-                        supplier.get("floor"), supplier.get("location_description"),
-                    ]))
-                    if not isinstance(supplier_name, str) or not supplier_name.strip() or not pickup_location:
-                        raise ValueError("Missing supplier name or pickup location")
-                    if type(supplier["is_active"]) is not bool or type(supplier["is_open_now"]) is not bool:
-                        raise ValueError("Invalid supplier availability")
-                except (KeyError, TypeError, ValueError, AttributeError):
-                    raise HTTPException(502, "Supplier Service returned invalid details.") from None
-                if not supplier["is_active"] or not supplier["is_open_now"]:
-                    raise HTTPException(409, "Supplier is inactive or currently closed.")
-
-            with request.app.state.database.begin() as connection:
-                order = queries.create_order(
-                    connection, requester_user_id=caller.id,
-                    supplier_name=supplier_name, pickup_location=pickup_location,
-                    idempotency_key=idempotency_key, **body.model_dump(),
-                )
-                return OrderResponse.model_validate(order)
-        except queries.OrderIdempotencyConflict as error:
-            raise HTTPException(409, str(error)) from error
-        except IntegrityError:
-            raise HTTPException(409, "Conflicting order operation.") from None
-        except OperationalError:
-            raise HTTPException(503, "Database unavailable.") from None
-        except ValueError as error:
-            raise HTTPException(422, str(error)) from error
+        # Replays retain the supplier snapshot, even if the supplier is now closed.
+        with request.app.state.database.connect() as connection:
+            existing = connection.execute(select(orders).where(
+                orders.c.requester_user_id == caller.id,
+                orders.c.idempotency_key == idempotency_key,
+            )).mappings().one_or_none()
+        snapshot = (existing["supplier_name"], existing["pickup_location"]) if existing else supplier_snapshot(
+            os.getenv("SUPPLIER_SERVICE_URL", "http://localhost:8001"),
+            body.supplier_id, request.headers["authorization"],
+        )
+        with request.app.state.database.begin() as connection:
+            return OrderResponse.model_validate(queries.create_order(
+                connection, requester_user_id=caller.id,
+                supplier_name=snapshot[0], pickup_location=snapshot[1],
+                idempotency_key=idempotency_key, **body.model_dump(),
+            ))
 
     @app.get("/api/v1/orders", response_model=OrderPageResponse)
     def list_orders(

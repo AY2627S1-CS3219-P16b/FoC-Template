@@ -11,17 +11,12 @@ import AdminSection from "./components/AdminSection";
 import SupplierAdminSection from "./components/SupplierAdminSection";
 import ConfirmDialog from "./components/ConfirmDialog";
 import {
-  initialSuppliers,
-  initialOrders,
-} from "./data/mockData";
-import {
   getCredits,
   initializeCredits,
   listCreditLedger,
-  releaseCredits,
-  reserveCredits,
-  transferCredits,
 } from "./api/credits";
+import { changeOrder, createOrder, getOrder, loadOrders, orderForDisplay } from "./api/orders";
+import { fetchSupplier, fetchSuppliers, formatHours, formatPlace } from "./api/suppliers";
 import {
   getUserProfile,
   loginUser,
@@ -419,6 +414,7 @@ function AuthScreen({ registration }) {
 }
 
 function SupplierDetailScreen({ supplier, onChoose }) {
+  if (!supplier) return <main className="main-content">No supplier available. Choose one from the supplier list.</main>;
   return (
     <main className="main-content">
       <div className="section-header">
@@ -427,16 +423,16 @@ function SupplierDetailScreen({ supplier, onChoose }) {
       <div className="card detail-card">
         <h3>{supplier.name}</h3>
         <p>
-          <strong>Campus location:</strong> {supplier.location}
+          <strong>Campus location:</strong> {formatPlace(supplier.place)} {supplier.floor}
         </p>
         <p>
-          <strong>Description:</strong> {supplier.description}
+          <strong>Description:</strong> {supplier.location_description || "None"}
         </p>
         <p>
-          <strong>Pickup instructions:</strong> {supplier.pickupNotes}
+          <strong>Pickup instructions:</strong> {supplier.pickup_instructions || "None"}
         </p>
         <p>
-          <strong>Operating hours:</strong> {supplier.operatingHours}
+          <strong>Operating hours:</strong> {formatHours(supplier)}
         </p>
         <div className="detail-actions">
           <button
@@ -455,6 +451,7 @@ function SupplierDetailScreen({ supplier, onChoose }) {
 }
 
 function CourierDetailScreen({ order, onAccept }) {
+  if (!order) return <main className="main-content">No order available. Browse open orders to choose one.</main>;
   return (
     <main className="main-content">
       <div className="section-header">
@@ -482,9 +479,7 @@ function CourierDetailScreen({ order, onAccept }) {
         <p>
           <strong>Requester:</strong> {order.requesterName}
         </p>
-        <div className="action-error">
-          Example status: this order may already be assigned.
-        </div>
+        <p>Status: {order.status.replaceAll("_", " ")}</p>
         <div className="detail-actions">
           <button
             className="btn btn-secondary"
@@ -492,7 +487,7 @@ function CourierDetailScreen({ order, onAccept }) {
           >
             Back
           </button>
-          <button className="btn btn-primary" onClick={onAccept}>
+          <button className="btn btn-primary" onClick={onAccept} disabled={order.status !== "OPEN"}>
             Accept order
           </button>
         </div>
@@ -527,6 +522,14 @@ function RequestErrorScreen() {
   );
 }
 
+function formatLedgerEntry(entry) {
+  return {
+    id: entry.id, time: new Date(entry.created_at).toLocaleString(), type: entry.type,
+    title: entry.type.replaceAll("_", " "), orderRef: entry.order_id || "SYSTEM",
+    amount: entry.amount, status: entry.type,
+  };
+}
+
 export default function App() {
   const accessToken = getStoredAccessToken();
 
@@ -544,8 +547,10 @@ export default function App() {
 
   useEffect(() => {
     if (!accessToken) return;
+    let ignore = false;
     getUserProfile(accessToken, user.id)
       .then((profile) => {
+        if (ignore) return;
         setUser(profileToUser(profile));
         setRole(profile.active_role_mode);
         setActiveTab((current) => {
@@ -573,40 +578,9 @@ export default function App() {
           }),
         );
       })
-      .catch((error) => setProfileError(error.message));
+      .catch((error) => { if (!ignore) setProfileError(error.message); });
+    return () => { ignore = true; };
   }, [accessToken, user.id]);
-
-  useEffect(() => {
-    if (!accessToken) return;
-
-    async function loadCredits() {
-      try {
-        const balance = await initializeCredits(accessToken);
-        const ledger = await listCreditLedger(accessToken);
-
-        setAvailableCredits(balance.available_balance);
-        setReservedCredits(balance.reserved_balance);
-        setTransactions(ledger.items.map(formatLedgerEntry));
-        setCreditError("");
-      } catch (error) {
-        setCreditError(error.message);
-      }
-    }
-
-    loadCredits();
-  }, [accessToken]);
-
-  function formatLedgerEntry(entry) {
-    return {
-      id: entry.id,
-      time: new Date(entry.created_at).toLocaleString(),
-      type: entry.type,
-      title: entry.type.replaceAll("_", " "),
-      orderRef: entry.order_id || "SYSTEM",
-      amount: entry.amount,
-      status: entry.type,
-    };
-  }
 
   const handleProfileUpdate = async (changes) => {
     const profile = await updateUserProfile(accessToken, user.id, changes);
@@ -617,7 +591,7 @@ export default function App() {
   const handleRoleChange = async (mode) => {
     if (switchingRole) return; // disable role switching while already in progress
     const nextTab = mode === "COURIER" ? "courier-browse" : "suppliers";
-    if (mode === role) {
+    if (mode === role && tokenPayload(accessToken).active_role_mode === mode) {
       setActiveTab(nextTab);
       return;
     }
@@ -648,6 +622,8 @@ export default function App() {
 
   // Main UI States
   const screen = new URLSearchParams(window.location.search).get("screen");
+  const requestedOrderId = new URLSearchParams(window.location.search).get("order_id");
+  const requestedSupplierId = new URLSearchParams(window.location.search).get("supplier_id");
   const initialTab =
     {
       suppliers: "suppliers",
@@ -704,9 +680,14 @@ export default function App() {
   }, [hasUnsaved]);
 
   // Data States
-  const [suppliers] = useState(initialSuppliers);
-  const [orders, setOrders] = useState(initialOrders);
+  const [suppliers, setSuppliers] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [orderError, setOrderError] = useState("");
+  const orderSequence = useRef(0);
+  const creatingOrder = useRef(null);
+  const pendingActions = useRef(new Set());
   const [transactions, setTransactions] = useState([]);
+  const [transactionCount, setTransactionCount] = useState(0);
   const [availableCredits, setAvailableCredits] = useState(0);
   const [reservedCredits, setReservedCredits] = useState(0);
   const [creditError, setCreditError] = useState("");
@@ -715,20 +696,31 @@ export default function App() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(
     screen === "create-request",
   );
-  const [selectedSupplierForOrder, setSelectedSupplierForOrder] = useState(
-    screen === "create-request" ? initialSuppliers[0] : null,
-  );
+  const [selectedSupplierForOrder, setSelectedSupplierForOrder] = useState(null);
 
-  const routeSupplier =
-    suppliers.find((supplier) => supplier.id === "sup-1") || suppliers[0];
-  const routeOrder =
-    orders.find((order) => order.id === "REQ-102") || orders[0];
+  const routeSupplier = suppliers[0];
+  const routeOrder = requestedOrderId ? orders.find((order) => order.id === requestedOrderId)
+    : orders.find((order) => order.status === "OPEN") || orders[0];
+
+  useEffect(() => {
+    if (!accessToken || !["supplier-detail", "create-request"].includes(screen)) return undefined;
+    let ignore = false;
+    const load = requestedSupplierId
+      ? fetchSupplier({ token: accessToken, supplierId: requestedSupplierId })
+      : fetchSuppliers({ token: accessToken, pageSize: 1 }).then((result) => result.items[0]);
+    load.then((supplier) => {
+      if (ignore) return;
+      setSuppliers(supplier ? [supplier] : []);
+      setSelectedSupplierForOrder(supplier || null);
+    }).catch((error) => { if (!ignore) setOrderError(error.message); });
+    return () => { ignore = true; };
+  }, [accessToken, screen, requestedSupplierId]);
 
   // Active courier task for the current user
   const activeCourierTask = orders.find(
     (o) =>
       o.courierId === user.id &&
-      ["ACCEPTED", "PICKED_UP", "DELIVERED"].includes(o.status),
+      ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETING"].includes(o.status),
   );
 
   // Quick Open Modal from Supplier List
@@ -737,106 +729,90 @@ export default function App() {
     setIsOrderModalOpen(true);
   };
 
-  const refreshCredits = async () => {
-    const [balance, ledger] = await Promise.all([
-      getCredits(accessToken),
-      listCreditLedger(accessToken),
-    ]);
+  const refreshCredits = useCallback(async () => {
+    const balance = await getCredits(accessToken).catch((error) => {
+      if (error.status === 404) return initializeCredits(accessToken);
+      throw error;
+    });
+    const ledger = await listCreditLedger(accessToken);
     setAvailableCredits(balance.available_balance);
     setReservedCredits(balance.reserved_balance);
     setTransactions(ledger.items.map(formatLedgerEntry));
+    setTransactionCount(ledger.total);
     setCreditError("");
     return balance;
+  }, [accessToken]);
+
+  const refreshOrders = useCallback(async () => {
+    const sequence = ++orderSequence.current;
+    const rows = await loadOrders(accessToken);
+    if (screen === "courier-detail" && requestedOrderId && !rows.some((order) => order.id === requestedOrderId)) {
+      rows.push(await getOrder(accessToken, requestedOrderId));
+    }
+    if (sequence === orderSequence.current) setOrders(rows.map((order) => orderForDisplay(order, user.id)));
+  }, [accessToken, user.id, screen, requestedOrderId]);
+
+  useEffect(() => {
+    if (!accessToken) return undefined;
+    let stopped = false;
+    let timer;
+    const poll = async () => {
+      const results = await Promise.allSettled([refreshOrders(), refreshCredits()]);
+      if (stopped) return;
+      setOrderError(results[0].status === "rejected" ? results[0].reason.message : "");
+      if (results[1].status === "rejected") setCreditError(results[1].reason.message);
+      timer = setTimeout(poll, 5000);
+    };
+    poll();
+    return () => { stopped = true; clearTimeout(timer); orderSequence.current += 1; };
+  }, [accessToken, refreshOrders, refreshCredits]);
+
+  const storeOrder = (order) => {
+    orderSequence.current += 1;
+    const displayed = orderForDisplay(order, user.id);
+    setOrders((previous) => [displayed, ...previous.filter((row) => row.id !== order.id)]);
+    setOrderError("");
   };
 
   // Requester: Submit New Errand Request
   const handleCreateOrder = async (newOrderData) => {
-    const newOrderId = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
-    const creditsReward = newOrderData.creditsReward || 1;
-
-    await reserveCredits(accessToken, newOrderId, creditsReward);
-    await refreshCredits();
-
-    const newOrder = {
-      id: newOrderId,
-      ...newOrderData,
-      requesterName: `${user.name} (You)`,
-      requesterId: user.id,
-      courierName: null,
-      courierId: null,
-      status: "OPEN",
-      createdAt: "Just now",
-    };
-
-    setOrders((prev) => [newOrder, ...prev]);
+    const fingerprint = JSON.stringify(newOrderData);
+    if (creatingOrder.current?.fingerprint !== fingerprint) {
+      const minutes = { "Within 30 mins": 30, "Within 45 mins": 45, "Within 1 hour": 60 }[newOrderData.deadline] || 45;
+      creatingOrder.current = { fingerprint, key: crypto.randomUUID(), body: {
+        supplier_id: newOrderData.supplierId, item_description: newOrderData.items,
+        delivery_location: newOrderData.deliveryLocation,
+        delivery_instructions: newOrderData.instructions || null,
+        credit_amount: newOrderData.creditsReward || 1,
+        expires_at: new Date(Date.now() + minutes * 60000).toISOString(),
+      } };
+    }
+    const draft = creatingOrder.current;
+    storeOrder(await createOrder(accessToken, draft.body, draft.key));
+    creatingOrder.current = null;
     setActiveTab("my-requests");
   };
 
-  // Requester: Cancel Order
-  const handleCancelOrder = async (orderId) => {
+  const performOrderAction = async (orderId, action) => {
+    if (pendingActions.current.has(orderId)) return false;
+    pendingActions.current.add(orderId);
     try {
-      await releaseCredits(accessToken, orderId);
-      await refreshCredits();
+      storeOrder(await changeOrder(accessToken, orderId, action));
+      return true;
     } catch (error) {
-      setCreditError(error.message);
-      return;
+      setOrderError(error.message);
+      return false;
+    } finally {
+      pendingActions.current.delete(orderId);
     }
-
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "CANCELLED" } : o)),
-    );
   };
 
-  // Requester: Confirm Delivery Receipt
-  const handleConfirmDelivery = async (orderId) => {
-    const order = orders.find((o) => o.id === orderId);
-    if (!order?.courierId) {
-      setCreditError("A courier must be assigned before credits can be transferred.");
-      return;
-    }
-
-    try {
-      await transferCredits(accessToken, orderId, order.courierId);
-      await refreshCredits();
-    } catch (error) {
-      setCreditError(error.message);
-      return;
-    }
-
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "COMPLETED" } : o)),
-    );
-  };
-
-  // Courier: Accept Open Order
-  const handleAcceptOrder = (orderId) => {
-    setOrders((prev) =>
-      prev.map((o) =>
-        o.id === orderId
-          ? {
-              ...o,
-              status: "ACCEPTED",
-              courierName: user.name,
-              courierId: user.id,
-            }
-          : o,
-      ),
-    );
-    setActiveTab("courier-active");
-  };
-
-  // Courier: Mark Picked Up
-  const handleMarkPickedUp = (orderId) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "PICKED_UP" } : o)),
-    );
-  };
-
-  // Courier: Mark Delivered
-  const handleMarkDelivered = (orderId) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: "DELIVERED" } : o)),
-    );
+  const handleCancelOrder = (id) => performOrderAction(id, "cancel");
+  const handleConfirmDelivery = (id) => performOrderAction(id, "confirm");
+  const handleMarkPickedUp = (id) => performOrderAction(id, "pickup");
+  const handleMarkDelivered = (id) => performOrderAction(id, "deliver");
+  const handleAcceptOrder = async (id) => {
+    if (await performOrderAction(id, "accept")) setActiveTab("courier-active");
   };
 
   if (!accessToken && !["login", "register"].includes(screen)) {
@@ -863,6 +839,7 @@ export default function App() {
           supplier={routeSupplier}
           onChoose={() => handleQuickOpenModal(routeSupplier)}
         />
+        {orderError && <div className="action-error" role="alert">{orderError}</div>}
         <CreateOrderModal
           isOpen={isOrderModalOpen}
           onClose={() => setIsOrderModalOpen(false)}
@@ -891,6 +868,7 @@ export default function App() {
           order={routeOrder}
           onAccept={() => handleAcceptOrder(routeOrder.id)}
         />
+        {orderError && <div className="action-error" role="alert">{orderError}</div>}
       </>
     );
   }
@@ -931,6 +909,7 @@ export default function App() {
 
       {/* Main Sections */}
       <main className="main-content">
+        {orderError && <div className="action-error" role="alert">{orderError}</div>}
         {creditError && activeTab !== "credits" && (
           <div className="action-error" role="alert">
             {creditError}
@@ -979,6 +958,7 @@ export default function App() {
             availableCredits={availableCredits}
             reservedCredits={reservedCredits}
             transactions={transactions}
+            transactionCount={transactionCount}
             error={creditError}
           />
         )}

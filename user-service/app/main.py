@@ -32,6 +32,7 @@ from .api_schemas import (
     ProfileUpdateRequest,
     RegistrationRequest,
     RoleModeUpdateRequest,
+    RoleModeResponse,
     UserResponse,
 )
 
@@ -198,6 +199,15 @@ def create_app(
                 },
             )
 
+    def issue_access_token(user: dict[str, object]) -> str:
+        issued_at = datetime.now(timezone.utc)
+        return jwt.encode({
+            "sub": user["id"], "user_id": user["id"], "email": user["email"],
+            "auth_role": user["auth_role"], "active_role_mode": user["active_role_mode"],
+            "account_status": user["account_status"], "iat": issued_at,
+            "exp": issued_at + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS),
+        }, signing_key, algorithm="RS256")
+
     @app.post(
         "/api/v1/users/login",
         response_model=LoginResponse,
@@ -232,22 +242,8 @@ def create_app(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        issued_at = datetime.now(timezone.utc)
-        expires_at = issued_at + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS)
-        claims = {
-            "sub": user["id"],
-            "user_id": user["id"],
-            "email": user["email"],
-            "auth_role": user["auth_role"],
-            "active_role_mode": user["active_role_mode"],
-            "account_status": user["account_status"],
-            "iat": issued_at,
-            "exp": expires_at,
-        }
-        access_token = jwt.encode(claims, signing_key, algorithm="RS256")
-
         return {
-            "access_token": access_token,
+            "access_token": issue_access_token(user),
             "token_type": "bearer",
             "expires_in": ACCESS_TOKEN_TTL_SECONDS,
             "user": {
@@ -340,7 +336,7 @@ def create_app(
 
     @app.patch(
         "/api/v1/users/{user_id}/role-mode",
-        response_model=UserResponse,
+        response_model=RoleModeResponse,
         openapi_extra={
             "requestBody": {
                 "content": {
@@ -361,7 +357,7 @@ def create_app(
         updated = database.update_active_role_mode(user_id, update_request.active_role_mode)
         if not updated:
             raise HTTPException(status_code=401, detail="Invalid authentication token.")
-        return updated
+        return {**updated, "access_token": issue_access_token(updated)}
 
     @app.patch(
         "/api/v1/users/{user_id}/auth-role",

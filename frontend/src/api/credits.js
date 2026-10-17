@@ -30,34 +30,3 @@ export function listCreditLedger(token, page = 1, pageSize = 20) {
   });
 }
 
-export function reserveCredits(token, orderId, amount = 1) {
-  return sendAuthenticatedRequest(`${API_BASE_URL}/api/v1/credits/reservations`, {
-    token,
-    method: "POST",
-    data: { order_id: orderId, amount },
-    errorMessage: "Could not reserve credits.",
-  });
-}
-
-export function releaseCredits(token, orderId) {
-  return sendAuthenticatedRequest(
-    `${API_BASE_URL}/api/v1/credits/reservations/${encodeURIComponent(orderId)}/release`,
-    {
-      token,
-      method: "POST",
-      errorMessage: "Could not release credits.",
-    },
-  );
-}
-
-export function transferCredits(token, orderId, courierUserId) {
-  return sendAuthenticatedRequest(
-    `${API_BASE_URL}/api/v1/credits/reservations/${encodeURIComponent(orderId)}/transfer`,
-    {
-      token,
-      method: "POST",
-      data: { courier_user_id: courierUserId },
-      errorMessage: "Could not transfer credits.",
-    },
-  );
-}

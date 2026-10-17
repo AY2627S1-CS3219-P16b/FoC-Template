@@ -17,11 +17,8 @@ export default function CreateOrderModal({
 
   if (!isOpen || !supplier) return null;
 
-  // Live suppliers carry a nested place; mock order data used a flat string.
-  const pickupLocation = supplier.place
-    ? `${formatPlace(supplier.place)}${supplier.floor ? `, Level ${supplier.floor}` : ''}`
-    : supplier.location;
-  const pickupNotes = supplier.pickup_instructions ?? supplier.pickupNotes;
+  const pickupLocation = `${formatPlace(supplier.place)}${supplier.floor ? `, Level ${supplier.floor}` : ''}`;
+  const pickupNotes = supplier.pickup_instructions;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -62,11 +59,11 @@ export default function CreateOrderModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={() => { if (!submitting) onClose(); }}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Create Errand Request</h3>
-          <button className="btn btn-secondary btn-sm" onClick={onClose}>X</button>
+          <button className="btn btn-secondary btn-sm" onClick={onClose} disabled={submitting}>X</button>
         </div>
 
         {errorMsg && (
@@ -120,7 +117,7 @@ export default function CreateOrderModal({
           </div>
 
           <div className="form-group">
-            <label>Deadline</label>
+            <label>Acceptance deadline</label>
             <select value={deadline} onChange={(e) => setDeadline(e.target.value)}>
               <option value="Within 30 mins">Within 30 mins</option>
               <option value="Within 45 mins">Within 45 mins</option>
