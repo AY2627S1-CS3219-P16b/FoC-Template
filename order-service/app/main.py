@@ -1,12 +1,21 @@
 """Order Service app setup and API endpoint skeletons."""
 
 from contextlib import asynccontextmanager
-from typing import Literal
 
-from fastapi import Body, Depends, FastAPI, Header, Query, Request, status
+from fastapi import Depends, FastAPI, Header, Query, Request, status
 from sqlalchemy import text
 
 from .auth import CurrentUser, current_user, load_jwt_public_key
+from .api_schemas import (
+    CreateOrderRequest,
+    HealthResponse,
+    OrderHistoryPageResponse,
+    OrderPageResponse,
+    OrderResponse,
+    OrderRole,
+    OrderStatus,
+    RequiredText,
+)
 from .database import create_database_engine
 from .schema import metadata
 
@@ -33,111 +42,110 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    @app.get("/health")
-    def health(request: Request) -> dict[str, str]:
+    @app.get("/health", response_model=HealthResponse)
+    def health(request: Request) -> HealthResponse:
         """Check service and database availability."""
         pass
 
-    @app.post("/api/v1/orders", status_code=status.HTTP_202_ACCEPTED)
+    @app.post("/api/v1/orders", response_model=OrderResponse, status_code=status.HTTP_202_ACCEPTED)
     def create_order(
         request: Request,
-        body: dict[str, object] = Body(...),
-        idempotency_key: str = Header(..., min_length=1, max_length=200),
+        body: CreateOrderRequest,
+        idempotency_key: RequiredText = Header(..., max_length=200, alias="Idempotency-Key"),
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
-        """Validate requester and supplier details; create an order pending credits.
-
-        Replace the generic body with CreateOrderRequest once schemas are defined.
-        """
+    ) -> OrderResponse:
+        """Validate requester and supplier details; create an order pending credits."""
         pass
 
-    @app.get("/api/v1/orders")
+    @app.get("/api/v1/orders", response_model=OrderPageResponse)
     def list_orders(
         request: Request,
-        status: str = Query("OPEN"),
-        supplier_id: str | None = Query(None),
+        status: OrderStatus = Query("OPEN"),
+        supplier_id: RequiredText | None = Query(None, max_length=100),
         page: int = Query(1, ge=1),
         page_size: int = Query(20, ge=1, le=100),
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderPageResponse:
         """Browse visible orders filtered by status and supplier."""
         pass
 
     # Register /me before /{order_id} so it is not treated as an order ID.
-    @app.get("/api/v1/orders/me")
+    @app.get("/api/v1/orders/me", response_model=OrderPageResponse)
     def get_user_orders(
         request: Request,
-        role: Literal["requester", "courier"] = Query(...),
-        status: str | None = Query(None),
+        role: OrderRole = Query(...),
+        status: OrderStatus | None = Query(None),
         page: int = Query(1, ge=1),
         page_size: int = Query(20, ge=1, le=100),
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderPageResponse:
         """List the caller's requests or courier assignments."""
         pass
 
-    @app.get("/api/v1/orders/{order_id}")
+    @app.get("/api/v1/orders/{order_id}", response_model=OrderResponse)
     def get_order_details(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderResponse:
         """Read an order visible to the caller."""
         pass
 
-    @app.post("/api/v1/orders/{order_id}/accept")
+    @app.post("/api/v1/orders/{order_id}/accept", response_model=OrderResponse)
     def assign_courier(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderResponse:
         """Assign the calling courier to an unexpired open order."""
         pass
 
-    @app.post("/api/v1/orders/{order_id}/pickup")
+    @app.post("/api/v1/orders/{order_id}/pickup", response_model=OrderResponse)
     def mark_items_collected(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderResponse:
         """Let the assigned courier mark the items collected."""
         pass
 
-    @app.post("/api/v1/orders/{order_id}/deliver")
+    @app.post("/api/v1/orders/{order_id}/deliver", response_model=OrderResponse)
     def mark_delivery_completed(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderResponse:
         """Let the assigned courier mark delivery, awaiting requester receipt."""
         pass
 
-    @app.post("/api/v1/orders/{order_id}/confirm", status_code=status.HTTP_202_ACCEPTED)
+    @app.post("/api/v1/orders/{order_id}/confirm", response_model=OrderResponse,
+              status_code=status.HTTP_202_ACCEPTED)
     def confirm_order_receipt(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderResponse:
         """Let the requester confirm receipt and queue the credit transfer."""
         pass
 
-    @app.post("/api/v1/orders/{order_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+    @app.post("/api/v1/orders/{order_id}/cancel", response_model=OrderResponse,
+              status_code=status.HTTP_202_ACCEPTED)
     def cancel_open_order(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderResponse:
         """Let the requester cancel an open order and queue credit release."""
         pass
 
-    @app.get("/api/v1/orders/{order_id}/history")
+    @app.get("/api/v1/orders/{order_id}/history", response_model=OrderHistoryPageResponse)
     def get_order_history(
-        order_id: str,
+        order_id: RequiredText,
         request: Request,
         page: int = Query(1, ge=1),
         page_size: int = Query(20, ge=1, le=100),
         caller: CurrentUser = Depends(current_user),
-    ) -> dict[str, object]:
+    ) -> OrderHistoryPageResponse:
         """Read chronological history for the requester or assigned courier."""
         pass
 
