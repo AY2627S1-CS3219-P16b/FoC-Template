@@ -551,9 +551,59 @@ def expire_open_orders(
 ) -> list[dict[str, object]]:
     """Atomically move due OPEN orders to EXPIRING and queue RELEASE jobs.
 
-    Coordinate with acceptance so an assigned order cannot expire.
+    Use now as the expiry cutoff. Skip rows locked by acceptance, cancellation
+    or another expiry worker. The caller commits the batch; the credit worker
+    marks orders EXPIRED only after release succeeds.
     """
-    pass
+    if not isinstance(now, datetime) or now.utcoffset() is None:
+        raise ValueError("now must be a timezone-aware datetime")
+    if type(batch_size) is not int or batch_size < 1:
+        raise ValueError("batch_size must be a positive integer")
+
+    with connection.begin_nested():
+        order_ids = connection.execute(
+            select(orders.c.id)
+            .where(
+                orders.c.status == "OPEN",
+                orders.c.courier_user_id.is_(None),
+                orders.c.expires_at <= now,
+            )
+            .order_by(orders.c.expires_at.asc(), orders.c.id.asc())
+            .limit(batch_size)
+            .with_for_update(skip_locked=True)
+        ).scalars().all()
+        if not order_ids:
+            return []
+
+        changed_at = connection.execute(select(func.clock_timestamp())).scalar_one()
+        expired = connection.execute(
+            update(orders).where(orders.c.id.in_(order_ids))
+            .values(status="EXPIRING", updated_at=changed_at).returning(orders)
+        ).mappings().all()
+        connection.execute(
+            insert(order_log),
+            [
+                {
+                    "order_id": order_id, "actor_user_id": None,
+                    "action": "EXPIRE_ORDER", "outcome": "SUCCEEDED",
+                    "previous_status": "OPEN", "new_status": "EXPIRING",
+                    "details": {}, "created_at": changed_at,
+                }
+                for order_id in order_ids
+            ],
+        )
+        connection.execute(
+            insert(credit_jobs),
+            [
+                {
+                    "order_id": order_id, "operation": "RELEASE", "attempts": 0,
+                    "next_attempt_at": changed_at, "created_at": changed_at,
+                }
+                for order_id in order_ids
+            ],
+        )
+        by_id = {row["id"]: dict(row) for row in expired}
+        return [by_id[order_id] for order_id in order_ids]
 
 
 def get_pending_credit_jobs(
