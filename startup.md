@@ -34,8 +34,9 @@ See [Credit Service](credit-service/README.md) for D3 coverage and remaining
 Order Service integration. Order Swagger runs at <http://localhost:8003/docs>.
 Container readiness checks OpenAPI and its database directly.
 `order-worker` processes durable credit jobs and expires unaccepted orders.
-The frontend calls Order Service for order actions and polls order states and
-credit balances every five seconds. Only Order Service's worker mutates order
+The frontend refreshes orders and credits immediately after order actions, then
+polls every second while credit actions are pending and every five seconds otherwise.
+Only Order Service's worker mutates order
 credits. See [service integration](integration.md) for the complete request flow.
 
 Open the frontend at <http://localhost:5173>, User Service Swagger at

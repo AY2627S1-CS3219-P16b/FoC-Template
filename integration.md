@@ -66,8 +66,9 @@ attention if credentials or data need fixing.
 
 The frontend calls only user-authorized routes and reads balances/ledger directly
 from Credit Service. It never holds service keys or calls reservation mutations.
-Orders are persisted by the server, and order states and balances are refreshed
-every five seconds while signed in. Pending states are displayed until workers
+Orders are persisted by the server. Order states and balances refresh immediately
+after actions, every second while credit actions are pending, and every five
+seconds otherwise while signed in. Pending states are displayed until workers
 finish; the UI does not claim completion before credit acknowledgement.
 
 Compose starts all four APIs/databases plus `user-credit-worker` and

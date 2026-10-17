@@ -684,6 +684,8 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [orderError, setOrderError] = useState("");
   const orderSequence = useRef(0);
+  const creditSequence = useRef(0);
+  const [refreshTick, setRefreshTick] = useState(0);
   const creatingOrder = useRef(null);
   const pendingActions = useRef(new Set());
   const [transactions, setTransactions] = useState([]);
@@ -730,11 +732,13 @@ export default function App() {
   };
 
   const refreshCredits = useCallback(async () => {
+    const sequence = ++creditSequence.current;
     const balance = await getCredits(accessToken).catch((error) => {
       if (error.status === 404) return initializeCredits(accessToken);
       throw error;
     });
     const ledger = await listCreditLedger(accessToken);
+    if (sequence !== creditSequence.current) return balance;
     setAvailableCredits(balance.available_balance);
     setReservedCredits(balance.reserved_balance);
     setTransactions(ledger.items.map(formatLedgerEntry));
@@ -752,6 +756,10 @@ export default function App() {
     if (sequence === orderSequence.current) setOrders(rows.map((order) => orderForDisplay(order, user.id)));
   }, [accessToken, user.id, screen, requestedOrderId]);
 
+  const hasPendingOrders = orders.some((order) =>
+    ["RESERVING", "CANCELLING", "EXPIRING", "COMPLETING"].includes(order.status),
+  );
+
   useEffect(() => {
     if (!accessToken) return undefined;
     let stopped = false;
@@ -761,17 +769,25 @@ export default function App() {
       if (stopped) return;
       setOrderError(results[0].status === "rejected" ? results[0].reason.message : "");
       if (results[1].status === "rejected") setCreditError(results[1].reason.message);
-      timer = setTimeout(poll, 5000);
+      timer = setTimeout(poll, hasPendingOrders ? 1000 : 5000);
     };
     poll();
-    return () => { stopped = true; clearTimeout(timer); orderSequence.current += 1; };
-  }, [accessToken, refreshOrders, refreshCredits]);
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+      orderSequence.current += 1;
+      creditSequence.current += 1;
+    };
+  }, [accessToken, refreshOrders, refreshCredits, hasPendingOrders, refreshTick]);
 
   const storeOrder = (order) => {
     orderSequence.current += 1;
+    creditSequence.current += 1;
     const displayed = orderForDisplay(order, user.id);
     setOrders((previous) => [displayed, ...previous.filter((row) => row.id !== order.id)]);
     setOrderError("");
+    // Wake the polling effect immediately after every successful action.
+    setRefreshTick((tick) => tick + 1);
   };
 
   // Requester: Submit New Errand Request

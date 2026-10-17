@@ -123,4 +123,5 @@ The repository does not contain the full assignment rubric. This implementation
 follows the lifecycle and Credit/Supplier contracts in this repository. Runtime
 verification and container builds were not performed during this review, as
 requested. The frontend calls Order Service for lifecycle actions and polls
-orders and credits every five seconds; it does not hold service credentials.
+orders and credits immediately after actions, every second while credit actions
+are pending, and every five seconds otherwise. It does not hold service credentials.
