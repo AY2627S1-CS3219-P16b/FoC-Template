@@ -47,6 +47,23 @@ services:
     volumes:
       - credit-db-data:/var/lib/postgresql/data
 
+  order-db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: order_db
+      POSTGRES_USER: order_service
+      POSTGRES_PASSWORD: order_service_local_dev
+    ports:
+      - "127.0.0.1:5436:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U order_service -d order_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - order-db-data:/var/lib/postgresql/data
+
   user-service:
     build: ./user-service
     environment:
@@ -135,6 +152,34 @@ services:
       retries: 20
       start_period: 10s
 
+  order-service:
+    build: ./order-service
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: postgresql+psycopg://order_service:order_service_local_dev@order-db:5432/order_db
+      JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
+      CREDIT_SERVICE_URL: http://credit-service:8002
+      SUPPLIER_SERVICE_URL: http://supplier-service:8001
+      ORDER_SERVICE_KEY: ${ORDER_SERVICE_KEY:?Set ORDER_SERVICE_KEY in .env}
+    volumes:
+      - type: bind
+        source: ./user-service/keys/jwt-public.pem
+        target: /run/keys/jwt-public.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "127.0.0.1:8003:8003"
+    depends_on:
+      order-db:
+        condition: service_healthy
+      supplier-service:
+        condition: service_healthy
+      credit-service:
+        condition: service_healthy
+    # The image probes OpenAPI and PostgreSQL; /health is still a skeleton.
+
   user-credit-worker:
     build: ./user-service
     command: ["python", "-m", "app.credit_worker"]
@@ -155,6 +200,7 @@ services:
       USER_API_PROXY_TARGET: http://user-service:8000
       SUPPLIER_API_PROXY_TARGET: http://supplier-service:8001
       CREDIT_API_PROXY_TARGET: http://credit-service:8002
+      ORDER_API_PROXY_TARGET: http://order-service:8003
     ports:
       - "127.0.0.1:5173:5173"
     depends_on:
@@ -164,9 +210,12 @@ services:
         condition: service_healthy
       credit-service:
         condition: service_healthy
+      order-service:
+        condition: service_healthy
 
 volumes:
   user-db-data:
   supplier-db-data:
   supplier-images:
   credit-db-data:
+  order-db-data:

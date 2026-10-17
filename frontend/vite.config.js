@@ -15,6 +15,7 @@ export default defineConfig({
       '/api/v1/supplier-changes': process.env.SUPPLIER_API_PROXY_TARGET || 'http://localhost:8001',
       '/api/v1/supplier-images': process.env.SUPPLIER_API_PROXY_TARGET || 'http://localhost:8001',
       '/api/v1/credits': process.env.CREDIT_API_PROXY_TARGET || 'http://localhost:8002',
+      '/api/v1/orders': process.env.ORDER_API_PROXY_TARGET || 'http://localhost:8003',
       '/api': process.env.USER_API_PROXY_TARGET || 'http://localhost:8000'
     }
   }

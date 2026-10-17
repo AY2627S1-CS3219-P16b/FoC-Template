@@ -1,12 +1,12 @@
 # Start Friend on Campus locally
 
-This guide covers the User Service, Supplier Service, and React frontend.
+This guide covers the User, Supplier, Credit and Order services, and React frontend.
 Run commands from the repository root unless a step says otherwise.
 
 ## Start everything with Docker (recommended for the demo)
 
 Docker Desktop must be running. Stop any manually started frontend or Uvicorn
-servers first so ports 5173, 8000 and 8001 are free.
+servers first so ports 5173 and 8000–8003 are free.
 
 On a fresh checkout, generate the JWT keys once using the key-generation commands
 in the User Service setup below. Keep existing keys if they already exist.
@@ -31,13 +31,20 @@ Credit Swagger runs at <http://localhost:8002/docs>. Registration now queues
 initial credit allocation; `user-credit-worker` retries delivery when Credit
 Service is unavailable. Inspect it with `docker compose logs user-credit-worker`.
 See [Credit Service](credit-service/README.md) for D3 coverage and remaining
-Order Service integration.
+Order Service integration. Order Swagger runs at <http://localhost:8003/docs>.
+Its API handlers remain skeletons; container readiness checks OpenAPI and its
+database directly. No order credit-job or expiry worker is implemented yet, so
+container startup does not demonstrate a complete order lifecycle.
 
 Open the frontend at <http://localhost:5173>, User Service Swagger at
 <http://localhost:8000/docs>, and Supplier Service Swagger at
-<http://localhost:8001/docs>. This starts both databases, both APIs, and the
-Vite development frontend. Containers use database port 5432 internally.
-Database health checks run before the APIs start; the frontend waits for both APIs.
+<http://localhost:8001/docs>. This starts four databases, four APIs, the registration
+credit worker, and the Vite development frontend. Containers use database port
+5432 internally.
+Database health checks run before the APIs start; the frontend waits for all APIs.
+Order data persists in `order-db-data`. Its database is available locally on
+port 5436; containers connect to `order-db:5432`. Order Service uses port 8003,
+receives only the public JWT key, and shares `ORDER_SERVICE_KEY` with Credit Service.
 
 For a fresh supplier database only:
 
@@ -59,7 +66,7 @@ Useful commands:
 
 ```bash
 docker compose ps
-docker compose logs --tail=100 user-service supplier-service frontend
+docker compose logs --tail=100 user-service supplier-service credit-service order-service frontend
 docker compose stop
 ```
 
@@ -217,7 +224,8 @@ Open <http://localhost:5173>. Register at
 <http://localhost:5173/?screen=login>.
 
 Vite forwards supplier, place, and supplier-audit requests to Supplier Service
-on port 8001, and other `/api` requests to User Service on port 8000.
+on port 8001, credit requests to port 8002, order requests to port 8003, and other
+`/api` requests to User Service on port 8000.
 For a remotely hosted User Service, set `VITE_USER_API_URL` to its origin before
 starting or building the frontend.
 
