@@ -1,4 +1,4 @@
-"""Container readiness probe while the HTTP endpoint handlers are unfinished."""
+"""Check container HTTP readiness and database connectivity."""
 
 from urllib.request import urlopen
 

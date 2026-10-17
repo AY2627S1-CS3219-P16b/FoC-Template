@@ -178,7 +178,7 @@ services:
         condition: service_healthy
       credit-service:
         condition: service_healthy
-    # The image probes OpenAPI and PostgreSQL; /health is still a skeleton.
+    # The image probes OpenAPI and PostgreSQL directly.
 
   user-credit-worker:
     build: ./user-service

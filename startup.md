@@ -32,8 +32,8 @@ initial credit allocation; `user-credit-worker` retries delivery when Credit
 Service is unavailable. Inspect it with `docker compose logs user-credit-worker`.
 See [Credit Service](credit-service/README.md) for D3 coverage and remaining
 Order Service integration. Order Swagger runs at <http://localhost:8003/docs>.
-Its API handlers remain skeletons; container readiness checks OpenAPI and its
-database directly. No order credit-job or expiry worker is implemented yet, so
+Container readiness checks OpenAPI and its database directly.
+No order credit-job or expiry worker is implemented yet, so
 container startup does not demonstrate a complete order lifecycle.
 
 Open the frontend at <http://localhost:5173>, User Service Swagger at
