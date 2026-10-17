@@ -398,6 +398,58 @@ def mark_delivery_completed(
     )
 
 
+def _change_requester_order(
+    connection: Connection,
+    order_id: str,
+    requester_user_id: str,
+    *,
+    previous_status: str,
+    next_status: str,
+    completed_status: str,
+    credit_operation: Literal["RELEASE", "TRANSFER"],
+    action: str,
+) -> dict[str, object]:
+    """Atomically apply a requester transition, history and credit job.
+
+    The caller commits. Retrying a pending or completed action adds no writes.
+    Final status is set by the worker only after Credit Service acknowledges.
+    """
+    order_id = _required_text(order_id, "order_id")
+    requester_user_id = _required_text(requester_user_id, "requester_user_id")
+    with connection.begin_nested():
+        order = connection.execute(
+            select(orders).where(orders.c.id == order_id).with_for_update()
+        ).mappings().one_or_none()
+        if order is None:
+            raise OrderNotFoundError("Order does not exist.")
+        if order["requester_user_id"] != requester_user_id:
+            raise OrderAccessDeniedError("Only the requester can update this order.")
+        if order["status"] in (next_status, completed_status):
+            return dict(order)
+        if order["status"] != previous_status:
+            raise OrderStateError(f"Order must be {previous_status} to move to {next_status}.")
+
+        now = connection.execute(select(func.clock_timestamp())).scalar_one()
+        updated = connection.execute(
+            update(orders).where(orders.c.id == order_id)
+            .values(status=next_status, updated_at=now).returning(orders)
+        ).mappings().one()
+        connection.execute(
+            insert(order_log).values(
+                order_id=order_id, actor_user_id=requester_user_id, action=action,
+                outcome="SUCCEEDED", previous_status=previous_status,
+                new_status=next_status, details={}, created_at=now,
+            )
+        )
+        connection.execute(
+            insert(credit_jobs).values(
+                order_id=order_id, operation=credit_operation, attempts=0,
+                next_attempt_at=now, created_at=now,
+            )
+        )
+        return dict(updated)
+
+
 def confirm_order_receipt(
     connection: Connection,
     order_id: str,
@@ -408,7 +460,13 @@ def confirm_order_receipt(
 
     Use the persisted courier ID and amount; retries must not queue extra jobs.
     """
-    pass
+
+    return _change_requester_order(
+        connection, order_id, requester_user_id,
+        previous_status="DELIVERED", next_status="COMPLETING",
+        completed_status="COMPLETED", credit_operation="TRANSFER",
+        action="CONFIRM_ORDER_RECEIPT",
+    )
 
 
 def cancel_open_order(
@@ -418,7 +476,12 @@ def cancel_open_order(
     requester_user_id: str,
 ) -> dict[str, object]:
     """Move the requester's OPEN order to CANCELLING and queue one RELEASE."""
-    pass
+    return _change_requester_order(
+        connection, order_id, requester_user_id,
+        previous_status="OPEN", next_status="CANCELLING",
+        completed_status="CANCELLED", credit_operation="RELEASE",
+        action="CANCEL_ORDER",
+    )
 
 
 def get_order_history(
