@@ -1,12 +1,13 @@
 services:
   user-db:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: user_db
       POSTGRES_USER: user_service
-      POSTGRES_PASSWORD: user_service_local_dev
-    ports:
-      - "127.0.0.1:5434:5432"
+      POSTGRES_PASSWORD: ${USER_DB_PASSWORD:?Set USER_DB_PASSWORD in .env}
+    networks:
+      - user-data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user_service -d user_db"]
       interval: 5s
@@ -17,12 +18,13 @@ services:
 
   supplier-db:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: supplier_db
       POSTGRES_USER: supplier
-      POSTGRES_PASSWORD: supplier_local_dev
-    ports:
-      - "127.0.0.1:5433:5432"
+      POSTGRES_PASSWORD: ${SUPPLIER_DB_PASSWORD:?Set SUPPLIER_DB_PASSWORD in .env}
+    networks:
+      - supplier-data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U supplier -d supplier_db"]
       interval: 5s
@@ -33,12 +35,13 @@ services:
 
   credit-db:
     image: postgres:17
+    restart: unless-stopped
     environment:
       POSTGRES_DB: credit_db
       POSTGRES_USER: credit
-      POSTGRES_PASSWORD: credit_local_dev
-    ports:
-      - "127.0.0.1:5435:5432"
+      POSTGRES_PASSWORD: ${CREDIT_DB_PASSWORD:?Set CREDIT_DB_PASSWORD in .env}
+    networks:
+      - credit-data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U credit -d credit_db"]
       interval: 5s
@@ -53,9 +56,9 @@ services:
     environment:
       POSTGRES_DB: order_db
       POSTGRES_USER: order_service
-      POSTGRES_PASSWORD: order_service_local_dev
-    ports:
-      - "127.0.0.1:5436:5432"
+      POSTGRES_PASSWORD: ${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}
+    networks:
+      - order-data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U order_service -d order_db"]
       interval: 5s
@@ -66,8 +69,13 @@ services:
 
   user-service:
     build: ./user-service
+    restart: unless-stopped
+    networks:
+      - edge
+      - services
+      - user-data
     environment:
-      DATABASE_URL: postgresql+psycopg://user_service:user_service_local_dev@user-db:5432/user_db
+      DATABASE_URL: postgresql+psycopg://user_service:${USER_DB_PASSWORD:?Set USER_DB_PASSWORD in .env}@user-db:5432/user_db
       JWT_PRIVATE_KEY_PATH: /run/keys/jwt-private.pem
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
@@ -89,17 +97,17 @@ services:
     depends_on:
       user-db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json', timeout=3)"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+    # The image probes OpenAPI.
 
   supplier-service:
     build: ./supplier-service
+    restart: unless-stopped
+    networks:
+      - edge
+      - services
+      - supplier-data
     environment:
-      DATABASE_URL: postgresql+psycopg://supplier:supplier_local_dev@supplier-db:5432/supplier_db
+      DATABASE_URL: postgresql+psycopg://supplier:${SUPPLIER_DB_PASSWORD:?Set SUPPLIER_DB_PASSWORD in .env}@supplier-db:5432/supplier_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       SUPPLIER_IMAGE_DIR: /data/supplier-images
     volumes:
@@ -117,18 +125,17 @@ services:
     depends_on:
       supplier-db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/openapi.json', timeout=3)"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+    # The image probes OpenAPI.
 
   credit-service:
     build: ./credit-service
+    networks:
+      - edge
+      - services
+      - credit-data
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://credit:credit_local_dev@credit-db:5432/credit_db
+      DATABASE_URL: postgresql+psycopg://credit:${CREDIT_DB_PASSWORD:?Set CREDIT_DB_PASSWORD in .env}@credit-db:5432/credit_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       INITIAL_CREDITS: 20
       USER_SERVICE_KEY: ${USER_SERVICE_KEY:?Set USER_SERVICE_KEY in .env}
@@ -145,19 +152,18 @@ services:
     depends_on:
       credit-db:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-      start_period: 10s
+    # The image probes /health.
 
   order-service:
     build: ./order-service
+    networks:
+      - edge
+      - services
+      - order-data
     restart: unless-stopped
     init: true
     environment:
-      DATABASE_URL: postgresql+psycopg://order_service:order_service_local_dev@order-db:5432/order_db
+      DATABASE_URL: postgresql+psycopg://order_service:${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}@order-db:5432/order_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       CREDIT_SERVICE_URL: http://credit-service:8002
       SUPPLIER_SERVICE_URL: http://supplier-service:8001
@@ -182,12 +188,15 @@ services:
 
   order-worker:
     build: ./order-service
+    networks:
+      - services
+      - order-data
     command: ["python", "-m", "app.worker"]
     restart: unless-stopped
     init: true
     stop_grace_period: 20s
     environment:
-      DATABASE_URL: postgresql+psycopg://order_service:order_service_local_dev@order-db:5432/order_db
+      DATABASE_URL: postgresql+psycopg://order_service:${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}@order-db:5432/order_db
       CREDIT_SERVICE_URL: http://credit-service:8002
       ORDER_SERVICE_KEY: ${ORDER_SERVICE_KEY:?Set ORDER_SERVICE_KEY in .env}
     depends_on:
@@ -201,9 +210,12 @@ services:
 
   user-credit-worker:
     build: ./user-service
+    networks:
+      - services
+      - user-data
     command: ["python", "-m", "app.credit_worker"]
     environment:
-      DATABASE_URL: postgresql+psycopg://user_service:user_service_local_dev@user-db:5432/user_db
+      DATABASE_URL: postgresql+psycopg://user_service:${USER_DB_PASSWORD:?Set USER_DB_PASSWORD in .env}@user-db:5432/user_db
       CREDIT_SERVICE_URL: http://credit-service:8002
       USER_SERVICE_KEY: ${USER_SERVICE_KEY:?Set USER_SERVICE_KEY in .env}
     restart: unless-stopped
@@ -212,9 +224,16 @@ services:
         condition: service_healthy
       credit-service:
         condition: service_healthy
+    # The API image's HTTP health probe does not apply to this worker process.
+    healthcheck:
+      disable: true
 
   frontend:
     build: ./frontend
+    restart: unless-stopped
+    networks:
+      - edge
+      - services
     environment:
       USER_API_PROXY_TARGET: http://user-service:8000
       SUPPLIER_API_PROXY_TARGET: http://supplier-service:8001
@@ -231,6 +250,25 @@ services:
         condition: service_healthy
       order-service:
         condition: service_healthy
+
+networks:
+  edge:
+    driver: bridge
+  services:
+    driver: bridge
+    internal: true
+  user-data:
+    driver: bridge
+    internal: true
+  supplier-data:
+    driver: bridge
+    internal: true
+  credit-data:
+    driver: bridge
+    internal: true
+  order-data:
+    driver: bridge
+    internal: true
 
 volumes:
   user-db-data:

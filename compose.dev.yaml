@@ -1,0 +1,31 @@
+# Development override: publishes each database on loopback for host-side
+# tests, database clients and services run outside Docker.
+# Usage: docker compose -f compose.yaml -f compose.dev.yaml up -d
+#
+# dev-db is a non-internal network required for port publishing. No
+# application service joins it; service-to-database isolation is unchanged.
+
+services:
+  user-db:
+    networks: [dev-db]
+    ports:
+      - "127.0.0.1:5434:5432"
+
+  supplier-db:
+    networks: [dev-db]
+    ports:
+      - "127.0.0.1:5433:5432"
+
+  credit-db:
+    networks: [dev-db]
+    ports:
+      - "127.0.0.1:5435:5432"
+
+  order-db:
+    networks: [dev-db]
+    ports:
+      - "127.0.0.1:5436:5432"
+
+networks:
+  dev-db:
+    driver: bridge
