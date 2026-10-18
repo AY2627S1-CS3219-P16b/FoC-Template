@@ -315,7 +315,10 @@ entered as the `X-Service-Key` header in Credit Swagger.
 Credit uses `python:3.12-slim`, installs `requirements.txt`, and starts Uvicorn on
 8002. The worker reuses the User Service image with its own startup command.
 PostgreSQL uses the Docker Official Image `postgres:17`. Compose service names
-provide internal DNS; ports are bound to loopback for local development. Database
+provide internal DNS. `credit-db` joins only the private `credit-data` network
+and has no host port unless the development override is used (port 5435); the
+API port is bound to loopback for Swagger. The database password comes from
+the root `.env`. Database
 health checks gate startup, Credit's `/health` checks its database, and the worker
 and Credit restart after process failure. Connection pools check stale connections.
 

@@ -13,41 +13,78 @@ in the User Service setup below. Keep existing keys if they already exist.
 Compose mounts those files read-only; only User Service receives the private key.
 No Python/Node installation or service `.env` files are needed for this Docker path.
 
-Before first startup, create the ignored repository-root `.env` with two distinct
-random service credentials (never put these in frontend configuration):
+Create the repository-root `.env` (git-ignored) and set each value with
+`openssl rand -hex 32`:
 
-```dotenv
-USER_SERVICE_KEY=<random value from openssl rand -hex 32>
-ORDER_SERVICE_KEY=<another random value from openssl rand -hex 32>
+```bash
+cp .env.example .env
 ```
 
-From the repository root:
+Database passwords apply only when a volume is first created. Databases created
+before this change use `user_service_local_dev`, `supplier_local_dev`,
+`credit_local_dev` and `order_service_local_dev`.
+
+Start the stack:
 
 ```bash
 docker compose up --build -d
 ```
 
-Credit Swagger runs at <http://localhost:8002/docs>. Registration now queues
-initial credit allocation; `user-credit-worker` retries delivery when Credit
-Service is unavailable. Inspect it with `docker compose logs user-credit-worker`.
-See [Credit Service](credit-service/README.md) for D3 coverage and remaining
-Order Service integration. Order Swagger runs at <http://localhost:8003/docs>.
-Container readiness checks OpenAPI and its database directly.
-`order-worker` processes durable credit jobs and expires unaccepted orders.
-The frontend refreshes orders and credits immediately after order actions, then
-polls every second while credit actions are pending and every five seconds otherwise.
-Only Order Service's worker mutates order
-credits. See [service integration](integration.md) for the complete request flow.
+| Component      | URL                          |
+| -------------- | ---------------------------- |
+| Frontend       | <http://localhost:5173>      |
+| User API       | <http://localhost:8000/docs> |
+| Supplier API   | <http://localhost:8001/docs> |
+| Credit API     | <http://localhost:8002/docs> |
+| Order API      | <http://localhost:8003/docs> |
 
-Open the frontend at <http://localhost:5173>, User Service Swagger at
-<http://localhost:8000/docs>, and Supplier Service Swagger at
-<http://localhost:8001/docs>. This starts four databases, four APIs, the registration
-credit worker, the order worker, and the Vite development frontend. Containers
-use database port 5432 internally.
-Database health checks run before the APIs start; the frontend waits for all APIs.
-Order data persists in `order-db-data`. Its database is available locally on
-port 5436; containers connect to `order-db:5432`. Order Service uses port 8003,
-receives only the public JWT key, and shares `ORDER_SERVICE_KEY` with Credit Service.
+The stack runs four databases, four APIs, `user-credit-worker` (registration
+credit allocation), `order-worker` (credit jobs and order expiry) and the Vite
+frontend. APIs start after their databases are healthy; the frontend starts
+after all APIs. Order Service readiness checks OpenAPI and its database
+directly. See [service integration](integration.md) for request flows.
+
+- Registration queues the initial credit allocation; `user-credit-worker`
+  retries delivery while Credit Service is unavailable. Inspect it with
+  `docker compose logs user-credit-worker`.
+- Only `order-worker` mutates order credits.
+- Order Service receives only the public JWT key and shares `ORDER_SERVICE_KEY`
+  with Credit Service.
+- The frontend refreshes orders and credits after each order action, then polls
+  every second while credit actions are pending and every five seconds
+  otherwise.
+- See [Credit Service](credit-service/README.md) for D3 coverage.
+
+### Networks
+
+| Network    | Members                                  | Internal |
+| ---------- | ---------------------------------------- | -------- |
+| `edge`     | frontend, APIs                           | No       |
+| `services` | frontend, APIs, workers                  | Yes      |
+| `*-data`   | one service, its worker and its database | Yes      |
+
+Each database is reachable only from its owning service. Published ports are
+bound to `127.0.0.1`; databases are not published.
+
+### Development override
+
+Publishes the database ports for host-side tests, database clients and
+services run outside Docker:
+
+```bash
+docker compose -f compose.yaml -f compose.dev.yaml up -d
+```
+
+| Database      | Port |
+| ------------- | ---- |
+| `supplier-db` | 5433 |
+| `user-db`     | 5434 |
+| `credit-db`   | 5435 |
+| `order-db`    | 5436 |
+
+Use the same `-f` flags with `ps`, `stop` and `down`.
+
+### Data and administration
 
 For a fresh supplier database only:
 
@@ -73,9 +110,10 @@ docker compose logs --tail=100 user-service supplier-service credit-service orde
 docker compose stop
 ```
 
-Do not add `-v` to `docker compose down` unless you intend to erase the databases.
-The remaining sections describe the alternative of running Python and Node
-on your laptop while Docker runs only the databases.
+`docker compose down -v` erases all databases.
+
+The sections below cover running the services on the host, with Docker
+providing only the databases through the development override.
 
 ## Prerequisites
 
@@ -102,7 +140,7 @@ has their own local data; Git shares source code, not database contents.
 From the repository root:
 
 ```bash
-docker compose up -d user-db
+docker compose -f compose.yaml -f compose.dev.yaml up -d user-db
 docker compose exec user-db pg_isready -U user_service -d user_db
 
 cd user-service
@@ -113,8 +151,10 @@ python -m pip install -r requirements.txt
 
 Create `user-service/.env` with:
 
+Replace `<USER_DB_PASSWORD>` with the value from the root `.env`.
+
 ```dotenv
-DATABASE_URL=postgresql+psycopg://user_service:user_service_local_dev@localhost:5434/user_db
+DATABASE_URL=postgresql+psycopg://user_service:<USER_DB_PASSWORD>@localhost:5434/user_db
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 JWT_PRIVATE_KEY_PATH=keys/jwt-private.pem
 JWT_PUBLIC_KEY_PATH=keys/jwt-public.pem
@@ -145,7 +185,7 @@ Leave it running. API documentation: <http://localhost:8000/docs>.
 In a separate terminal, from the repository root:
 
 ```bash
-docker compose up -d supplier-db
+docker compose -f compose.yaml -f compose.dev.yaml up -d supplier-db
 docker compose exec supplier-db pg_isready -U supplier -d supplier_db
 ```
 
@@ -162,13 +202,12 @@ python -m pip install -r requirements.txt
 Create `supplier-service/.env.dev` with:
 
 ```dotenv
-DATABASE_URL=postgresql+psycopg://supplier:supplier_local_dev@localhost:5433/supplier_db
+DATABASE_URL=postgresql+psycopg://supplier:<SUPPLIER_DB_PASSWORD>@localhost:5433/supplier_db
 JWT_PUBLIC_KEY_PATH=keys/jwt-public.pem
 ```
 
-These local development credentials match `compose.yaml`. The environment
-file is ignored by Git. FastAPI runs on your Mac and connects to port 5433;
-Docker forwards that connection to PostgreSQL on port 5432 inside the container.
+Replace `<SUPPLIER_DB_PASSWORD>` with the value from the root `.env`. The file
+is git-ignored.
 
 Copy User Service's public key so Supplier Service can verify tokens locally,
 without calling User Service:
@@ -191,7 +230,7 @@ python -m app.seed
 For a fresh database, expect:
 
 ```text
-Loaded 21 CSV rows; inserted 21; suppliers in database: 21
+Loaded 54 CSV rows; inserted 54; suppliers in database: 54
 ```
 
 Run the import for a fresh database; it is not needed on every startup.

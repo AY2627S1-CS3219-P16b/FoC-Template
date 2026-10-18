@@ -371,6 +371,10 @@ python -m unittest discover -s tests -v
 RUN_POSTGRES_TESTS=1 python -m unittest discover -s tests -v
 ```
 
+The second command needs `supplier-db` on host port 5433, so start it with the
+development override (`docker compose -f compose.yaml -f compose.dev.yaml up -d
+supplier-db`; see the [startup guide](../startup.md)).
+
 The first command runs checks without database access. The second also tests
 imports, stored relationships, duplicate prevention, and foreign-key
 constraints in a temporary PostgreSQL schema, then removes that test schema.

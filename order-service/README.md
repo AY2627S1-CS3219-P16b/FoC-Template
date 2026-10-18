@@ -91,15 +91,23 @@ error types/statuses without printing service credentials.
 ## Containers and local setup
 
 See [startup guide](../startup.md). Compose starts `order-db`, `order-service` and
-`order-worker`. The API runs as a non-root user on port 8003; PostgreSQL is
-available locally on port 5436 and persists in `order-db-data`. The worker needs
+`order-worker`. The API runs as a non-root user on port 8003; PostgreSQL
+persists in `order-db-data` and is reachable only on the private `order-data`
+network, or on host port 5436 with the development override. The worker needs
 no JWT key. Only the API receives User Service's read-only public key.
 
-For a Python setup, use Python 3.12 and install `requirements.txt`. Configure
-`order-service/.env.dev` (or environment variables):
+For a Python setup, use Python 3.12 and install `requirements.txt`. Start
+`order-db` with the development override so port 5436 is published:
+
+```sh
+docker compose -f compose.yaml -f compose.dev.yaml up -d order-db
+```
+
+Configure `order-service/.env.dev` (or environment variables), using
+`ORDER_DB_PASSWORD` from the root `.env`:
 
 ```dotenv
-DATABASE_URL=postgresql+psycopg://order_service:order_service_local_dev@localhost:5436/order_db
+DATABASE_URL=postgresql+psycopg://order_service:<ORDER_DB_PASSWORD>@localhost:5436/order_db
 JWT_PUBLIC_KEY_PATH=../user-service/keys/jwt-public.pem
 SUPPLIER_SERVICE_URL=http://localhost:8001
 CREDIT_SERVICE_URL=http://localhost:8002

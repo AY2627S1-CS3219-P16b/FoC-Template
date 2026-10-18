@@ -74,8 +74,10 @@ finish; the UI does not claim completion before credit acknowledgement.
 Compose starts all four APIs/databases plus `user-credit-worker` and
 `order-worker`. Vite routes `/api/v1/orders` to Order, `/api/v1/credits` to Credit,
 supplier routes to Supplier, and user routes to User. See [startup](startup.md).
-Set two distinct root `.env` service keys and generate the User Service JWT keys
-before starting; existing account/order data lives in persistent named volumes.
+Create the root `.env` from `.env.example` (service keys and database passwords)
+and generate the User Service JWT keys before starting; existing account/order
+data lives in persistent named volumes. Each database is reachable only on its
+owner's private network.
 
 For a manual walkthrough, register two accounts, create a one-credit request
 from an open supplier, accept/deliver it as the second account, then confirm as
