@@ -327,9 +327,4 @@ Named database volumes survive stop/recreate; `down -v` deletes them. Startup's
 tables. It is not a schema migration system: future column changes need explicit
 migrations. No credit seed data is required. Public JWT keys are mounted read-only;
 only User Service has the private key. Service credentials come from environment
-variables. The existing Compose database passwords remain local-development
-values; before claiming complete Part 4 compliance, externalize those passwords,
-freeze dependency versions and demonstrate external/internal network isolation.
-Order Service and its worker are configured in Compose. A full container demo
-and team N2H scope/owners remain project-level D3 work. Container execution has
-not been verified during this review.
+variables. Order Service and its worker are configured in Compose.
