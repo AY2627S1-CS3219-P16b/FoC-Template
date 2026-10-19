@@ -86,8 +86,3 @@ requester `19 available / 1 reserved` after reservation, then `19 / 0` and couri
 `21 / 0` after confirmation is processed. A canceled/expired one-credit request
 returns its held credit to the requester. Pending states can take a worker poll
 plus a frontend refresh to resolve.
-
-These are the implemented contracts and expected results. No runtime checks,
-tests, builds or containers were run during this review, per the user's request.
-The repository does not include a full assignment rubric, so course-wide
-compliance beyond these contracts has not been established.

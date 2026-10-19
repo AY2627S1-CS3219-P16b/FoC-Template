@@ -3,73 +3,72 @@
 This guide covers the User, Supplier, Credit and Order services, and React frontend.
 Run commands from the repository root unless a step says otherwise.
 
-## Start everything with Docker (recommended for the demo)
+## Run with Docker
 
-Docker Desktop must be running. Stop any manually started frontend or Uvicorn
-servers first so ports 5173 and 8000–8003 are free.
+Requires Docker Desktop running and ports 5173 and 8000–8003 free.
 
-On a fresh checkout, generate the JWT keys once using the key-generation commands
-in the User Service setup below. Keep existing keys if they already exist.
-Compose mounts those files read-only; only User Service receives the private key.
-No Python/Node installation or service `.env` files are needed for this Docker path.
+### First-time setup (once per machine)
 
-Create the repository-root `.env` (git-ignored) and set each value with
-`openssl rand -hex 32`:
+Skip if `.env` and `user-service/keys/` already exist.
+
+1. Generate `.env`. Run this once only: databases keep the password from their
+   first start, so regenerating breaks them. The command will not overwrite an
+   existing `.env`.
+
+   ```bash
+   [ -e .env ] && echo ".env already exists; keep it" || bash -c '
+   for k in USER_SERVICE_KEY ORDER_SERVICE_KEY USER_DB_PASSWORD SUPPLIER_DB_PASSWORD CREDIT_DB_PASSWORD ORDER_DB_PASSWORD; do
+     echo "$k=$(openssl rand -hex 32)"
+   done' > .env
+   ```
+
+2. Generate the JWT keys:
+
+   ```bash
+   mkdir -p user-service/keys
+   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out user-service/keys/jwt-private.pem
+   openssl pkey -in user-service/keys/jwt-private.pem -pubout -out user-service/keys/jwt-public.pem
+   chmod 600 user-service/keys/jwt-private.pem
+   ```
+
+3. Start the stack, then seed suppliers:
+
+   ```bash
+   docker compose up --build -d
+   docker compose exec supplier-service python -m app.seed
+   ```
+
+4. Register an account at <http://localhost:5173>, then make it the first admin
+   and log in again:
+
+   ```bash
+   docker compose exec user-service python -m app.bootstrap_admin user-email@u.nus.edu
+   ```
+
+   This works once only. Later admins are promoted from the admin page.
+
+### Daily use
 
 ```bash
-cp .env.example .env
+docker compose up --build -d   # start (rebuilds changed images)
+docker compose ps              # status
+docker compose logs -f <service>
+docker compose stop            # stop, keep data
 ```
 
-Database passwords apply only when a volume is first created. Databases created
-before this change use `user_service_local_dev`, `supplier_local_dev`,
-`credit_local_dev` and `order_service_local_dev`.
+`docker compose down -v` deletes all databases.
 
-Start the stack:
+| Component    | URL                          |
+| ------------ | ---------------------------- |
+| Frontend     | <http://localhost:5173>      |
+| User API     | <http://localhost:8000/docs> |
+| Supplier API | <http://localhost:8001/docs> |
+| Credit API   | <http://localhost:8002/docs> |
+| Order API    | <http://localhost:8003/docs> |
 
-```bash
-docker compose up --build -d
-```
+### Database ports (development override)
 
-| Component      | URL                          |
-| -------------- | ---------------------------- |
-| Frontend       | <http://localhost:5173>      |
-| User API       | <http://localhost:8000/docs> |
-| Supplier API   | <http://localhost:8001/docs> |
-| Credit API     | <http://localhost:8002/docs> |
-| Order API      | <http://localhost:8003/docs> |
-
-The stack runs four databases, four APIs, `user-credit-worker` (registration
-credit allocation), `order-worker` (credit jobs and order expiry) and the Vite
-frontend. APIs start after their databases are healthy; the frontend starts
-after all APIs. Order Service readiness checks OpenAPI and its database
-directly. See [service integration](integration.md) for request flows.
-
-- Registration queues the initial credit allocation; `user-credit-worker`
-  retries delivery while Credit Service is unavailable. Inspect it with
-  `docker compose logs user-credit-worker`.
-- Only `order-worker` mutates order credits.
-- Order Service receives only the public JWT key; only `order-worker` holds
-  `ORDER_SERVICE_KEY`, which it shares with Credit Service.
-- The frontend refreshes orders and credits after each order action, then polls
-  every second while credit actions are pending and every five seconds
-  otherwise.
-- See [Credit Service](credit-service/README.md) for D3 coverage.
-
-### Networks
-
-| Network    | Members                                  | Internal |
-| ---------- | ---------------------------------------- | -------- |
-| `edge`     | frontend, APIs                           | No       |
-| `services` | frontend, APIs, workers                  | Yes      |
-| `*-data`   | one service, its worker and its database | Yes      |
-
-Each database is reachable only from its owning service. Published ports are
-bound to `127.0.0.1`; databases are not published.
-
-### Development override
-
-Publishes the database ports for host-side tests, database clients and
-services run outside Docker:
+To reach the databases from the host:
 
 ```bash
 docker compose -f compose.yaml -f compose.dev.yaml up -d
@@ -83,34 +82,6 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d
 | `order-db`    | 5436 |
 
 Use the same `-f` flags with `ps`, `stop` and `down`.
-
-### Data and administration
-
-For a fresh supplier database only:
-
-```bash
-docker compose exec supplier-service python -m app.seed
-```
-
-Register an account through the frontend. For the first admin, replace the email:
-
-```bash
-docker compose exec user-service python -m app.bootstrap_admin user-email@u.nus.edu
-```
-
-Existing database volumes and accounts are retained; daily startup does not seed
-or bootstrap again. After the first build, use `docker compose up -d`; after code
-changes, use `docker compose up --build -d` to rebuild the affected images.
-
-Useful commands:
-
-```bash
-docker compose ps
-docker compose logs --tail=100 user-service supplier-service credit-service order-service order-worker frontend
-docker compose stop
-```
-
-`docker compose down -v` erases all databases.
 
 The sections below cover running the services on the host, with Docker
 providing only the databases through the development override.
@@ -130,7 +101,7 @@ export PATH="/Applications/Docker.app/Contents/Resources/bin:$PATH"
 docker compose version
 ```
 
-## First-time setup
+## First-time setup (running on the host)
 
 Complete these steps once per checkout and local database. Each developer
 has their own local data; Git shares source code, not database contents.

@@ -14,31 +14,67 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 | Name | Role |
 | ----- | ----- |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
-| Your Name | Your ownership |
+| Chong Yi Jie | Your ownership |
+| Jessica Ange Xu | Your ownership |
+| Aurora Yufei Shi | Your ownership |
+
+---
+
+## Architecture
+
+Four microservices, each with its own PostgreSQL database, plus a React frontend.
+Services communicate over HTTP and never read each other's tables.
+
+| Service | Port | Responsibility |
+| --- | --- | --- |
+| `user-service` | 8000 | Accounts, roles, JWT signing |
+| `supplier-service` | 8001 | Supplier catalogue, campus places, opening hours |
+| `credit-service` | 8002 | Balances, reservations, credit ledger |
+| `order-service` | 8003 | Errands, assignments, order history, credit jobs |
+| `frontend` | 5173 | React + Vite UI; proxies `/api/v1/*` to the services |
+
+Two background workers deliver credit operations asynchronously through a
+transactional outbox: `user-credit-worker` (initial credits on registration) and
+`order-worker` (reserve, release and transfer credits; order expiry).
+
+See [service integration](integration.md) for request flows.
+
+---
+
+## Quick Start (Docker)
+
+First time: follow [startup](startup.md#first-time-setup-once-per-machine)
+to generate `.env` and the JWT keys, seed suppliers and create the first admin.
+Generate `.env` once only; regenerating it breaks the existing databases.
+
+Then:
+
+```bash
+docker compose up --build -d
+```
+
+Open <http://localhost:5173>.
 
 ---
 
 ## Repository Structure
 
-See [service integration](integration.md) for the four-service workflow and
-[startup](startup.md) for local/container configuration.
-
 This repository follows a **one-service-per-folder** structure: each
-microservice (`user-service/`, `supplier-service/`, `order-service/`,
-`credit-service/`) lives in its own top-level folder.
+microservice lives in its own top-level folder with its own Dockerfile.
 
 ```text
 .
-├── user-service/
-├── supplier-service/
-├── order-service/
-├── credit-service/
-├── <n2h-service>/
-└── README.md
+├── user-service/        # FastAPI service + user-credit-worker
+├── supplier-service/    # FastAPI service
+├── order-service/       # FastAPI service + order-worker
+├── credit-service/      # FastAPI service
+├── frontend/            # React + Vite
+├── data/                # Supplier seed data and images
+├── compose.yaml         # Full stack: 4 APIs, 2 workers, 4 databases, frontend
+├── compose.dev.yaml     # Dev override: publishes database ports
+├── .env.example         # Required secrets (copy to .env)
+├── integration.md       # Service contracts and workflows
+└── startup.md           # Setup and run guide
 ```
 
 - Any **nice-to-have (N2H)** feature that warrants its own service should
