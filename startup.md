@@ -48,8 +48,8 @@ directly. See [service integration](integration.md) for request flows.
   retries delivery while Credit Service is unavailable. Inspect it with
   `docker compose logs user-credit-worker`.
 - Only `order-worker` mutates order credits.
-- Order Service receives only the public JWT key and shares `ORDER_SERVICE_KEY`
-  with Credit Service.
+- Order Service receives only the public JWT key; only `order-worker` holds
+  `ORDER_SERVICE_KEY`, which it shares with Credit Service.
 - The frontend refreshes orders and credits after each order action, then polls
   every second while credit actions are pending and every five seconds
   otherwise.
