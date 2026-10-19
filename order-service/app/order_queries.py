@@ -192,6 +192,29 @@ def list_orders(
     )
 
 
+def list_admin_orders(
+    connection: Connection,
+    *,
+    requester_user_id: str | None = None,
+    status: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict[str, object]:
+    """List all orders for a caller authorized by the endpoint as an admin."""
+    filters = []
+    if requester_user_id is not None:
+        filters.append(orders.c.requester_user_id == _required_text(
+            requester_user_id, "requester_user_id",
+        ))
+    if status is not None:
+        if status not in ORDER_STATUSES:
+            raise ValueError("status must be a valid order status")
+        filters.append(orders.c.status == status)
+    return _page(connection, select(orders).where(*filters).order_by(
+        orders.c.created_at.desc(), orders.c.id.desc(),
+    ), page, page_size)
+
+
 def get_user_orders(
     connection: Connection,
     user_id: str,

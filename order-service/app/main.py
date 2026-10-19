@@ -9,7 +9,7 @@ from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
-from .auth import CurrentUser, current_user, load_jwt_public_key
+from .auth import CurrentUser, current_user, load_jwt_public_key, require_admin
 from .api_schemas import (
     CreateOrderRequest,
     HealthResponse,
@@ -121,7 +121,23 @@ def create_app() -> FastAPI:
                 supplier_id=supplier_id, page=page, page_size=page_size,
             ))
 
-    # Register /me before /{order_id} so it is not treated as an order ID.
+    @app.get("/api/v1/orders/admin", response_model=OrderPageResponse)
+    def list_admin_orders(
+        request: Request,
+        requester_user_id: RequiredText | None = Query(None, max_length=100),
+        status: OrderStatus | None = Query(None),
+        page: int = Query(1, ge=1),
+        page_size: int = Query(20, ge=1, le=100),
+        caller: CurrentUser = Depends(require_admin),
+    ) -> OrderPageResponse:
+        """Let admins view all orders, optionally filtered by requester and status."""
+        with request.app.state.database.connect() as connection:
+            return OrderPageResponse.model_validate(queries.list_admin_orders(
+                connection, requester_user_id=requester_user_id, status=status,
+                page=page, page_size=page_size,
+            ))
+
+    # Register static paths before /{order_id} so they are not treated as IDs.
     @app.get("/api/v1/orders/me", response_model=OrderPageResponse)
     def get_user_orders(
         request: Request,

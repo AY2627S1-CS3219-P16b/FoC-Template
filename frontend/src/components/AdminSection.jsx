@@ -7,6 +7,7 @@ import {
   listUsers,
 } from "../api/users";
 import ConfirmDialog from "./ConfirmDialog";
+import AdminOrdersSection from "./AdminOrdersSection";
 
 function profileForm(user) {
   return {
@@ -283,6 +284,7 @@ export default function AdminSection({ token, currentUserId, onUnsavedChange }) 
           </div>
         )}
       </div>
+      <AdminOrdersSection token={token} accounts={accounts} />
       <div className="card" style={{ marginTop: "12px" }}>
         <div className="audit-heading">
           <h3>Audit history</h3>

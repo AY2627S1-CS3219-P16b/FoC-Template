@@ -15,6 +15,15 @@ export function getOrder(token, id) {
   });
 }
 
+export function listAdminOrders(token, { page = 1, requesterId = "", status = "" } = {}) {
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (requesterId) params.set("requester_user_id", requesterId);
+  if (status) params.set("status", status);
+  return sendAuthenticatedRequest(`${BASE_URL}/admin?${params}`, {
+    token, method: "GET", errorMessage: "Could not load admin orders.",
+  });
+}
+
 async function listAll(token, path, filters) {
   const rows = [];
   for (let page = 1; ; page += 1) {
