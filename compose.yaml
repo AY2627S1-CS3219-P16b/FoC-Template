@@ -69,6 +69,7 @@ services:
 
   user-service:
     build: ./user-service
+    image: foc/user-service
     restart: unless-stopped
     networks:
       - edge
@@ -101,6 +102,7 @@ services:
 
   supplier-service:
     build: ./supplier-service
+    image: foc/supplier-service
     restart: unless-stopped
     networks:
       - edge
@@ -129,6 +131,7 @@ services:
 
   credit-service:
     build: ./credit-service
+    image: foc/credit-service
     networks:
       - edge
       - services
@@ -156,6 +159,7 @@ services:
 
   order-service:
     build: ./order-service
+    image: foc/order-service
     networks:
       - edge
       - services
@@ -187,7 +191,9 @@ services:
     # The image probes OpenAPI and PostgreSQL directly.
 
   order-worker:
-    build: ./order-service
+    # Runs the image built by order-service with a different command.
+    image: foc/order-service
+    pull_policy: never
     networks:
       - services
       - order-data
@@ -209,7 +215,9 @@ services:
       disable: true
 
   user-credit-worker:
-    build: ./user-service
+    # Runs the image built by user-service with a different command.
+    image: foc/user-service
+    pull_policy: never
     networks:
       - services
       - user-data
@@ -230,6 +238,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: foc/frontend
     restart: unless-stopped
     networks:
       - edge
