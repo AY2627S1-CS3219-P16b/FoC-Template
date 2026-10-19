@@ -69,6 +69,7 @@ services:
 
   user-service:
     build: ./user-service
+    image: foc/user-service
     restart: unless-stopped
     networks:
       - edge
@@ -101,6 +102,7 @@ services:
 
   supplier-service:
     build: ./supplier-service
+    image: foc/supplier-service
     restart: unless-stopped
     networks:
       - edge
@@ -129,6 +131,7 @@ services:
 
   credit-service:
     build: ./credit-service
+    image: foc/credit-service
     networks:
       - edge
       - services
@@ -156,6 +159,7 @@ services:
 
   order-service:
     build: ./order-service
+    image: foc/order-service
     networks:
       - edge
       - services
@@ -165,9 +169,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://order_service:${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}@order-db:5432/order_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
-      CREDIT_SERVICE_URL: http://credit-service:8002
       SUPPLIER_SERVICE_URL: http://supplier-service:8001
-      ORDER_SERVICE_KEY: ${ORDER_SERVICE_KEY:?Set ORDER_SERVICE_KEY in .env}
+    # Credit calls and ORDER_SERVICE_KEY belong to order-worker only.
     volumes:
       - type: bind
         source: ./user-service/keys/jwt-public.pem
@@ -182,12 +185,12 @@ services:
         condition: service_healthy
       supplier-service:
         condition: service_healthy
-      credit-service:
-        condition: service_healthy
     # The image probes OpenAPI and PostgreSQL directly.
 
   order-worker:
-    build: ./order-service
+    # Runs the image built by order-service with a different command.
+    image: foc/order-service
+    pull_policy: never
     networks:
       - services
       - order-data
@@ -209,7 +212,9 @@ services:
       disable: true
 
   user-credit-worker:
-    build: ./user-service
+    # Runs the image built by user-service with a different command.
+    image: foc/user-service
+    pull_policy: never
     networks:
       - services
       - user-data
@@ -230,6 +235,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: foc/frontend
     restart: unless-stopped
     networks:
       - edge
