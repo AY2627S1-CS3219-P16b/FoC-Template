@@ -40,11 +40,9 @@ was created.
 
 ## Can I request items from somewhere that isn't listed?
 
-No. Requests must use one of FoC's listed suppliers. Admins add and update
-suppliers. If a place you need is missing, ask an admin to add it.
-
-<!-- REVIEW: Confirm how students should ask for a new supplier (contact
-channel), and update if a suggestion feature is added. -->
+No. You can only create requests for suppliers already listed in FoC.
+Submitting suggestions for new suppliers is not currently supported. Admins
+manage the supplier list.
 
 ## Who manages the supplier list?
 

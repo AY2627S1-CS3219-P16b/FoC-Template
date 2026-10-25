@@ -1,7 +1,8 @@
 # FAQ knowledge base
 
-Source documents for the RAG-based FAQ assistant (N2H1). The ingestion worker
-splits each file into one chunk per `##` question.
+Source documents for the RAG-based FAQ assistant (N2H1). The indexer
+splits each content file into one chunk per `##` question. This README is not
+indexed. See [service setup](../README.md) for startup and index refresh commands.
 
 | File                 | Covers                                                              |
 | -------------------- | ------------------------------------------------------------------- |

@@ -6,6 +6,7 @@
 | Supplier (`8001`) | Catalogue, campus locations, opening hours | Order Service fetches supplier details using the caller's JWT |
 | Credit (`8002`) | Available/reserved balances, reservations, immutable ledger | Accepts order mutations only with `ORDER_SERVICE_KEY` |
 | Order (`8003`) | Errands, assignments, history, credit jobs | Worker reserves/releases/transfers credits and expires unaccepted orders |
+| FAQ (`8004`) | FAQ chunks, local embeddings, support request metadata | Public Help panel; calls Anthropic directly with retrieved FAQ evidence |
 
 Each service has its own PostgreSQL database. Services use HTTP contracts and
 shared IDs; they do not read each other's tables. Only User Service receives the
@@ -71,9 +72,10 @@ after actions, every second while credit actions are pending, and every five
 seconds otherwise while signed in. Pending states are displayed until workers
 finish; the UI does not claim completion before credit acknowledgement.
 
-Compose starts all four APIs/databases plus `user-credit-worker` and
+Compose starts all five APIs/databases plus `user-credit-worker` and
 `order-worker`. Vite routes `/api/v1/orders` to Order, `/api/v1/credits` to Credit,
-supplier routes to Supplier, and user routes to User. See [startup](startup.md).
+supplier routes to Supplier, `/api/v1/faq` to FAQ, and user routes to User.
+See [startup](startup.md).
 Create the root `.env` from `.env.example` (service keys and database passwords)
 and generate the User Service JWT keys before starting; existing account/order
 data lives in persistent named volumes. Each database is reachable only on its
@@ -86,3 +88,14 @@ requester `19 available / 1 reserved` after reservation, then `19 / 0` and couri
 `21 / 0` after confirmation is processed. A canceled/expired one-credit request
 returns its held credit to the requester. Pending states can take a worker poll
 plus a frontend refresh to resolve.
+
+## General FAQ support
+
+The Help panel also works before login. It sends only the current question to
+FAQ Service; no JWT or personal order/credit data is supplied. The service owns
+its pgvector database and embeds both FAQ chunks and incoming questions locally.
+Only the question and retrieved FAQ evidence are sent to Anthropic for an answer.
+HTML comments and the authoring README are excluded from indexing. Startup
+indexes changed documents; later changes can be indexed explicitly without a
+restart. Missing/stale indexes and provider failures produce a temporary-support
+message without blocking the core application. See [FAQ setup](faq-service/README.md).

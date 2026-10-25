@@ -1,0 +1,108 @@
+.faq-launcher {
+  position: fixed;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  right: 20px;
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 17px;
+  border: 1px solid #006ab7;
+  border-radius: 24px;
+  background: #006ab7;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 3px 14px #18244326;
+}
+.faq-launcher span {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+.faq-panel {
+  position: fixed;
+  bottom: max(80px, calc(env(safe-area-inset-bottom) + 60px));
+  right: 20px;
+  z-index: 90;
+  width: 410px;
+  max-width: calc(100vw - 32px);
+  height: 640px;
+  max-height: calc(100dvh - 100px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #ccd3df;
+  border-radius: 12px;
+  background: #fff;
+  color: #222;
+  box-shadow: 0 8px 32px #18244326;
+  font-size: 14px;
+  text-align: left;
+}
+.faq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
+  background: #232958;
+  color: #fff;
+}
+.faq-header h2 { margin: 0 0 3px; font-size: 17px; color: inherit; }
+.faq-header p { margin: 0; font-size: 12px; }
+.faq-icon-button {
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 26px;
+  cursor: pointer;
+}
+.faq-description { margin: 0; padding: 10px 16px; border-bottom: 1px solid #e2e6ed; color: #535b6c; font-size: 12px; }
+.faq-transcript { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+.faq-welcome > p { margin-bottom: 12px; font-weight: 600; color: #232958; }
+.faq-suggestions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.faq-suggestions button {
+  padding: 8px 10px;
+  border: 1px solid #b5cce1;
+  border-radius: 7px;
+  background: #f5f9fd;
+  color: #17558c;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.faq-message { margin-bottom: 14px; padding: 10px 12px; border-radius: 9px; background: #f3f5f8; overflow-wrap: anywhere; }
+.faq-message-user { margin-left: 28px; background: #e8f3fc; }
+.faq-speaker { display: block; margin-bottom: 5px; font-size: 11px; font-weight: 700; color: #4e586d; }
+.faq-message p { margin: 0; white-space: pre-wrap; }
+.faq-sources { margin-top: 10px; padding-top: 8px; border-top: 1px solid #d5dce6; font-size: 12px; }
+.faq-sources > span { color: #535b6c; }
+.faq-sources details { margin-top: 6px; }
+.faq-sources summary { cursor: pointer; color: #17558c; }
+.faq-sources details p { margin: 8px 0; }
+.faq-sources small { color: #535b6c; }
+.faq-pending { color: #535b6c; font-size: 13px; }
+.faq-error { margin: 0 16px 12px; padding: 10px 12px; border: 1px solid #dce2eb; border-radius: 8px; color: #4e586d; background: #f7f9fc; overflow-wrap: anywhere; }
+.faq-error p { margin: 0; }
+.faq-error-details { margin-top: 6px; font-size: 11px; }
+.faq-error-details summary { width: fit-content; cursor: pointer; color: #596579; }
+.faq-error-details code { display: block; margin-top: 6px; font-size: 11px; }
+.faq-form { padding: 12px 16px; border-top: 1px solid #e2e6ed; }
+.faq-form label { display: block; margin-bottom: 5px; font-size: 12px; font-weight: 600; }
+.faq-form textarea { display: block; width: 100%; min-height: 62px; max-height: 120px; resize: vertical; padding: 8px; border: 1px solid #a7b2c3; border-radius: 6px; font: inherit; }
+.faq-form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.faq-clear { margin-top: 9px; padding: 0; background: none; border: 0; color: #535b6c; text-decoration: underline; cursor: pointer; font: inherit; font-size: 11px; }
+.faq-panel button:focus-visible, .faq-panel textarea:focus-visible, .faq-panel summary:focus-visible, .faq-launcher:focus-visible { outline: 3px solid #eea425; outline-offset: 2px; }
+.faq-panel button:disabled { opacity: 0.5; cursor: not-allowed; }
+@media (max-width: 480px) {
+  .faq-panel { right: 12px; max-width: calc(100vw - 24px); }
+  .faq-launcher { right: 12px; }
+  .faq-form textarea { font-size: 16px; }
+}
