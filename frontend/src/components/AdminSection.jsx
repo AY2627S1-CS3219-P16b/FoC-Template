@@ -217,10 +217,10 @@ export default function AdminSection({ token, currentUserId, onUnsavedChange }) 
 
   return (
     <section>
-      <div className="section-header"><h2>Admin Accounts</h2></div>
+      <div className="section-header"><div><p className="page-eyebrow">Administration</p><h2>Account management</h2><p className="page-description">Manage student accounts, access, and account status.</p></div></div>
       {error && <div className="action-error" role="alert">{error}</div>}
       {message && <div className="success-message" role="status">{message}</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "12px" }}>
+      <div className="admin-account-layout">
         <div className="card">
           <h3>Accounts</h3>
           {accounts.map((account) => (

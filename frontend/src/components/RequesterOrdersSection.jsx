@@ -1,76 +1,20 @@
-import React from 'react';
+import React from "react";
+import OrderCard from "./OrderCard";
+import Icon from "./Icon";
 
-export default function RequesterOrdersSection({
-  orders,
-  onCancelOrder,
-  onConfirmDelivery,
-  onNewRequestClick
-}) {
+export default function RequesterOrdersSection({ orders, onCancelOrder, onConfirmDelivery, onNewRequestClick }) {
   return (
     <section>
-      <div className="section-header">
-        <h2>My Errand Requests</h2>
-        <button className="btn btn-primary btn-sm" onClick={onNewRequestClick}>
-          + New Request
-        </button>
-      </div>
-
-      {orders.length > 0 ? (
-        <div>
-          {orders.map((order) => (
-            <div key={order.id} className="card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <strong>Order {order.id} - {order.supplierName}</strong>
-                <span className={`badge badge-${order.status.toLowerCase().replace('_', '-')}`}>
-                  {order.status.replaceAll('_', ' ')}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: '6px' }}><strong>Pickup:</strong> {order.pickupLocation}</div>
-              <div style={{ marginBottom: '6px' }}><strong>Delivery to:</strong> {order.deliveryLocation}</div>
-              <div style={{ marginBottom: '6px' }}><strong>Items:</strong> {order.items}</div>
-              <div style={{ marginBottom: '6px' }}><strong>Instructions:</strong> {order.instructions}</div>
-              <div style={{ marginBottom: '6px' }}>
-                <strong>Courier:</strong> {order.courierName || 'Unassigned'}
-              </div>
-              <div style={{ marginBottom: '10px', fontSize: '12px', color: '#666666' }}>
-                Reward: {order.creditsReward} Credit | Created: {order.createdAt}
-              </div>
-
-              {['RESERVING', 'CANCELLING', 'EXPIRING', 'COMPLETING'].includes(order.status) && (
-                <div className="notice-box">Credit processing is pending. This request will update automatically.</div>
-              )}
-              {order.status === 'REJECTED' && (
-                <div className="action-error">Credits could not be reserved. Check your balance before creating another request.</div>
-              )}
-
-              <div style={{ display: 'flex', gap: '8px' }}>
-                {order.status === 'OPEN' && (
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    onClick={() => onCancelOrder(order.id)}
-                  >
-                    Cancel Request
-                  </button>
-                )}
-
-                {order.status === 'DELIVERED' && (
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => onConfirmDelivery(order.id)}
-                  >
-                    Confirm Delivery
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="empty-state">
-          <p>No errand requests created yet.</p>
-        </div>
-      )}
+      <div className="section-header compact-heading"><h2>My requests</h2><button type="button" className="btn btn-primary" onClick={onNewRequestClick}><Icon name="plus" />New Request</button></div>
+      {orders.length ? <div className="orders-grid">{orders.map((order) => {
+        const notice = ["RESERVING", "CANCELLING", "EXPIRING", "COMPLETING"].includes(order.status)
+          ? <div className="notice-box order-notice">Credit processing is pending. Your request will update automatically.</div>
+          : order.status === "REJECTED" ? <div className="action-error order-notice">Credits could not be reserved. Check your balance before creating another request.</div> : null;
+        return <OrderCard key={order.id} order={order} notice={notice}>
+          {order.status === "OPEN" && <button type="button" className="btn btn-secondary" onClick={() => onCancelOrder(order.id)}>Cancel Request</button>}
+          {order.status === "DELIVERED" && <button type="button" className="btn btn-primary" onClick={() => onConfirmDelivery(order.id)}>Confirm Delivery<Icon name="arrow" /></button>}
+        </OrderCard>;
+      })}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="list" /></span><h3>Your first errand starts here</h3><p>Choose a campus supplier and let someone help with the pickup.</p><button type="button" className="btn btn-primary" onClick={onNewRequestClick}>Browse Suppliers<Icon name="arrow" /></button></div>}
     </section>
   );
 }

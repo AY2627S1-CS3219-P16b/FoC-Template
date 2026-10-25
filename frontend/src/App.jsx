@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "./components/Navbar";
-import SuppliersSection from "./components/SuppliersSection";
+import SuppliersSection, { SupplierImage } from "./components/SuppliersSection";
+import OrderCard from "./components/OrderCard";
 import CreateOrderModal from "./components/CreateOrderModal";
 import RequesterOrdersSection from "./components/RequesterOrdersSection";
 import CourierOrdersSection from "./components/CourierOrdersSection";
@@ -414,84 +415,37 @@ function AuthScreen({ registration }) {
 }
 
 function SupplierDetailScreen({ supplier, onChoose }) {
-  if (!supplier) return <main className="main-content">No supplier available. Choose one from the supplier list.</main>;
+  if (!supplier) return <main className="main-content"><div className="empty-state"><h3>No supplier selected</h3><p>Choose a supplier from the list to see its details.</p><button className="btn btn-secondary" onClick={() => goToScreen("suppliers")}>Browse suppliers</button></div></main>;
   return (
     <main className="main-content">
-      <div className="section-header">
-        <h2>Supplier Details</h2>
-      </div>
-      <div className="card detail-card">
-        <h3>{supplier.name}</h3>
-        <p>
-          <strong>Campus location:</strong> {formatPlace(supplier.place)} {supplier.floor}
-        </p>
-        <p>
-          <strong>Description:</strong> {supplier.location_description || "None"}
-        </p>
-        <p>
-          <strong>Pickup instructions:</strong> {supplier.pickup_instructions || "None"}
-        </p>
-        <p>
-          <strong>Operating hours:</strong> {formatHours(supplier)}
-        </p>
-        <div className="detail-actions">
-          <button
-            className="btn btn-secondary"
-            onClick={() => goToScreen("suppliers")}
-          >
-            Back
-          </button>
-          <button className="btn btn-primary" onClick={onChoose}>
-            Choose supplier
-          </button>
+      <div className="section-header"><div><p className="page-eyebrow">Around campus</p><h2>Supplier details</h2><p className="page-description">Find the right pickup spot before you request an errand.</p></div><button className="btn btn-secondary" onClick={() => goToScreen("suppliers")}>Back to suppliers</button></div>
+      <article className="card supplier-detail-card">
+        <div className="supplier-detail-media"><SupplierImage supplier={supplier} /></div>
+        <div className="supplier-detail-content">
+          <span className={"supplier-status " + (supplier.is_open_now ? "supplier-status-open" : "supplier-status-closed")}>{supplier.is_open_now ? "Open now" : "Closed"}</span>
+          <h3>{supplier.name}</h3>
+          <dl className="supplier-detail-facts">
+            <div><dt>Campus location</dt><dd>{formatPlace(supplier.place)}{supplier.floor ? " · Level " + supplier.floor : ""}</dd></div>
+            <div><dt>Opening hours</dt><dd>{formatHours(supplier) || "Not listed"}</dd></div>
+            <div><dt>Pickup directions</dt><dd>{supplier.location_description || "No additional directions"}</dd></div>
+            <div><dt>Pickup instructions</dt><dd>{supplier.pickup_instructions || "No special instructions"}</dd></div>
+          </dl>
+          <div className="detail-actions"><button className="btn btn-primary" onClick={onChoose} disabled={!supplier.is_active || !supplier.is_open_now}>Create Request</button></div>
         </div>
-      </div>
+      </article>
     </main>
   );
 }
 
 function CourierDetailScreen({ order, onAccept }) {
-  if (!order) return <main className="main-content">No order available. Browse open orders to choose one.</main>;
+  if (!order) return <main className="main-content"><div className="empty-state"><h3>No order selected</h3><p>Browse open orders to choose an errand.</p><button className="btn btn-secondary" onClick={() => goToScreen("courier-orders")}>Browse Open Orders</button></div></main>;
   return (
     <main className="main-content">
-      <div className="section-header">
-        <h2>Courier Order Details</h2>
-      </div>
-      <div className="card detail-card">
-        <h3>
-          {order.id} - {order.supplierName}
-        </h3>
-        <p>
-          <strong>Pickup:</strong> {order.pickupLocation}
-        </p>
-        <p>
-          <strong>Item:</strong> {order.items}
-        </p>
-        <p>
-          <strong>Delivery:</strong> {order.deliveryLocation}
-        </p>
-        <p>
-          <strong>Instructions:</strong> {order.instructions}
-        </p>
-        <p>
-          <strong>Expiry:</strong> {order.deadline}
-        </p>
-        <p>
-          <strong>Requester:</strong> {order.requesterName}
-        </p>
-        <p>Status: {order.status.replaceAll("_", " ")}</p>
-        <div className="detail-actions">
-          <button
-            className="btn btn-secondary"
-            onClick={() => goToScreen("courier-orders")}
-          >
-            Back
-          </button>
-          <button className="btn btn-primary" onClick={onAccept} disabled={order.status !== "OPEN"}>
-            Accept order
-          </button>
-        </div>
-      </div>
+      <div className="section-header"><div><p className="page-eyebrow">Courier workspace</p><h2>Errand details</h2></div></div>
+      <div className="active-order-layout"><OrderCard order={order}>
+        <button className="btn btn-secondary" onClick={() => goToScreen("courier-orders")}>Back</button>
+        <button className="btn btn-primary" onClick={onAccept} disabled={order.status !== "OPEN"}>Accept Order</button>
+      </OrderCard></div>
     </main>
   );
 }
@@ -642,6 +596,10 @@ export default function App() {
     (user.activeRoleMode === "COURIER" ? "courier-browse" : "suppliers");
   const [role, setRole] = useState(user.activeRoleMode); // 'REQUESTER' | 'COURIER'
   const [activeTab, setActiveTab] = useState(initialTab); // 'suppliers', 'my-requests', 'courier-browse', 'courier-active', 'credits', 'profile'
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [activeTab]);
 
   // Unsaved admin edits, reported by each admin form. Leaving the admin tab
   // unmounts those forms, so tab switches, mode switches and logout ask first.

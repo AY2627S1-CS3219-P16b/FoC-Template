@@ -495,7 +495,7 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
           <div className="form-group">
             <input
               aria-label="Search suppliers"
-              placeholder="Search by name, location or tag…"
+              placeholder="Search suppliers…"
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
             />
@@ -505,13 +505,13 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
               <li key={supplier.id}>
                 <button
                   type="button"
-                  className={`btn btn-sm btn-block ${supplier.id === selectedId ? "btn-primary" : "btn-secondary"}${supplier.is_active ? "" : " is-hidden"}`}
+                  className={`supplier-admin-option${supplier.id === selectedId ? " is-selected" : ""}`}
+                  aria-pressed={supplier.id === selectedId}
                   onClick={() => select(supplier)}
                 >
-                  {supplier.name}
-                  {!supplier.is_active && " (hidden)"}
-                  <br />
-                  <small>{formatPlace(supplier.place)}</small>
+                  <span className="supplier-admin-option-name">{supplier.name}</span>
+                  <span className="supplier-admin-option-location">{formatPlace(supplier.place)}</span>
+                  {!supplier.is_active && <span className="supplier-admin-option-status">Hidden</span>}
                 </button>
               </li>
             ))}
