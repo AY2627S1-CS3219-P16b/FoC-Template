@@ -1,6 +1,13 @@
-import { sendAuthenticatedRequest } from "./client";
+import { sendAuthenticatedRequest } from "./client.js";
 
-const BASE_URL = `${import.meta.env.VITE_ORDER_API_URL || ""}/api/v1/orders`;
+const BASE_URL = `${import.meta.env?.VITE_ORDER_API_URL || ""}/api/v1/orders`;
+
+export function listRequesterOrders(token, { view = "active", page = 1, pageSize = 10 } = {}) {
+  const params = new URLSearchParams({ role: "requester", view, page: String(page), page_size: String(pageSize) });
+  return sendAuthenticatedRequest(`${BASE_URL}/me?${params}`, {
+    token, method: "GET", errorMessage: "Could not load your requests.",
+  });
+}
 
 export function createOrder(token, body, key) {
   return sendAuthenticatedRequest(BASE_URL, {
@@ -39,8 +46,8 @@ async function listAll(token, path, filters) {
 export async function loadOrders(token) {
   const groups = await Promise.all([
     listAll(token, "", { status: "OPEN" }),
-    listAll(token, "/me", { role: "requester" }),
-    listAll(token, "/me", { role: "courier" }),
+    listAll(token, "/me", { role: "requester", view: "active" }),
+    listAll(token, "/me", { role: "courier", view: "active" }),
   ]);
   return [...new Map(groups.flat().map((order) => [order.id, order])).values()]
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));

@@ -909,7 +909,9 @@ export default function App() {
 
         {role === "REQUESTER" && activeTab === "my-requests" && (
           <RequesterOrdersSection
-            orders={orders.filter((o) => o.requesterId === user.id)}
+            token={accessToken}
+            userId={user.id}
+            refreshTick={refreshTick}
             pendingOrderActions={pendingOrderActions}
             onCancelOrder={handleCancelOrder}
             onConfirmDelivery={handleConfirmDelivery}

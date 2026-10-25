@@ -13,7 +13,8 @@ before(async () => {
   // tests need no network socket or browser server.
   server = await createServer({ configFile: false, plugins: [react()], logLevel: "error", server: { middlewareMode: true, hmr: { server: createHttpServer() }, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true } });
   for (const name of ["OrderCard", "OrderActionButton", "CourierOrdersSection", "RequesterOrdersSection", "CourierActiveSection", "Navbar"]) {
-    components[name] = (await server.ssrLoadModule("/src/components/" + name + ".jsx")).default;
+    const module = await server.ssrLoadModule("/src/components/" + name + ".jsx");
+    components[name] = name === "RequesterOrdersSection" ? module.RequesterOrdersView : module.default;
   }
 });
 after(async () => { await server?.close(); });
@@ -114,4 +115,28 @@ test("progress is tied to the matching order across requester, courier and activ
     const active = render("CourierActiveSection", { activeTask: { ...order, status }, pendingAction: action, onMarkPickedUp: noop, onMarkDelivered: noop, onFindNewTask: noop });
     assert.match(active, /disabled="" aria-busy="true"[^>]*>Updating…/);
   }
+});
+
+test("request views show the selected filter, server totals and bounded pagination", () => {
+  const props = { orders: [order], onNewRequestClick: noop, onCancelOrder: noop, onConfirmDelivery: noop, onViewChange: noop, onPageChange: noop, onRefresh: noop, view: "past", total: 24, totalPages: 3 };
+  const first = render("RequesterOrdersSection", { ...props, page: 1 });
+  assert.match(first, /aria-pressed="true"[^>]*>Past/);
+  assert.match(first, /aria-pressed="false"[^>]*>Active/);
+  assert.doesNotMatch(first, /<button[^>]*>All<\/button>/);
+  assert.match(first, /24 past requests/);
+  assert.match(first, /Page 1 of 3/);
+  assert.match(first, /disabled=""[^>]*>Previous/);
+  assert.doesNotMatch(first, /disabled=""[^>]*>Next/);
+  const last = render("RequesterOrdersSection", { ...props, page: 3 });
+  assert.match(last, /disabled=""[^>]*>Next/);
+  assert.doesNotMatch(last, /disabled=""[^>]*>Previous/);
+  const empty = render("RequesterOrdersSection", { ...props, orders: [], total: 0, totalPages: 0 });
+  assert.match(empty, /No past requests/);
+  assert.doesNotMatch(empty, /My request pages|Browse Suppliers/);
+  const loading = render("RequesterOrdersSection", { ...props, hasResult: false, loading: true });
+  assert.match(loading, /Loading requests…/);
+  assert.doesNotMatch(loading, /No past requests|24 past requests|Page 1 of 3/);
+  const failed = render("RequesterOrdersSection", { ...props, hasResult: false, error: "Could not load your requests." });
+  assert.match(failed, /role="alert"[^>]*>Could not load your requests/);
+  assert.doesNotMatch(failed, /No past requests|24 past requests/);
 });

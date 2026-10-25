@@ -105,6 +105,12 @@ button { touch-action: manipulation; }
 .loading-state { padding: 28px; text-align: center; color: var(--muted); }
 
 /* Shared order cards, retaining full identifiers in expandable details. */
+.requests-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; }
+.requests-view-switch { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.requests-view-switch button { min-height: 36px; padding: 7px 16px; border: 0; border-radius: 6px; background: transparent; color: #526078; font-size: 13px; cursor: pointer; }
+.requests-view-switch button:hover { background: #f4f6fa; }
+.requests-view-switch button[aria-pressed="true"] { background: var(--primary-soft); color: #2448ad; font-weight: 650; }
+.requests-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 24px; color: #526078; font-size: 12px; }
 .orders-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
 .orders-grid > :only-child { grid-column: 1 / -1; width: 100%; max-width: 760px; }
 .order-card { margin: 0; padding: 23px; }
