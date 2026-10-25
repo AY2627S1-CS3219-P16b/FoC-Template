@@ -63,5 +63,8 @@ export function orderForDisplay(order, userId) {
     courierName: order.courier_user_id ? (order.courier_user_id === userId ? "You" : "Assigned courier") : null,
     deadline: new Date(order.expires_at).toLocaleString(),
     createdAt: new Date(order.created_at).toLocaleString(),
+    expiresAt: order.expires_at,
+    createdAtIso: order.created_at,
+    updatedAtIso: order.updated_at,
   };
 }

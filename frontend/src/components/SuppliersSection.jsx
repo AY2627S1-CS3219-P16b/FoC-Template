@@ -11,6 +11,7 @@ import {
   supplierImageSrc,
 } from '../api/suppliers';
 import PlaceTreeSelect from './PlaceTreeSelect';
+import Icon from './Icon';
 
 const PAGE_SIZE = 12;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -23,7 +24,7 @@ const initials = (name) => name.split(/\s+/).filter((word) => /[A-Za-z0-9]/.test
  * The supplier's photo, or a tile with its initials when there is none or it
  * fails to load, so every card in the grid keeps the same shape.
  */
-function SupplierImage({ supplier }) {
+export function SupplierImage({ supplier }) {
   const [failed, setFailed] = useState(false);
   const src = supplierImageSrc(supplier.image_url);
   if (!src || failed) {
@@ -153,21 +154,25 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
 
   return (
     <section>
-      <div className="section-header">
+      <div className="section-header compact-heading">
         <h2>Suppliers &amp; Campus Facilities</h2>
         {result ? (
           <span className="section-count">{result.total} suppliers</span>
         ) : null}
       </div>
 
-      <div className="filter-bar">
+      <div className="filter-bar supplier-filters">
+        <div className="search-field">
+        <Icon name="search" />
         <input
-          type="text"
+          type="search"
           className="search-input"
+          aria-label="Search suppliers or places"
           placeholder="Search suppliers or places, e.g. coffee, COM3…"
           value={searchTerm}
           onChange={(event) => setSearchTerm(event.target.value)}
         />
+        </div>
         <select
           className="filter-select"
           value={selectedCategory}
@@ -240,44 +245,40 @@ export default function SuppliersSection({ token, onQuickOpenModal }) {
         <>
           <div className="grid-suppliers">
             {suppliers.map((supplier) => (
-              <div key={supplier.id} className="card supplier-card">
-                <SupplierImage key={supplier.image_url} supplier={supplier} />
+              <article key={supplier.id} className="card supplier-card">
+                <div className="supplier-media">
+                  <SupplierImage key={supplier.image_url} supplier={supplier} />
+                  {typeof supplier.is_open_now === 'boolean' && (
+                    <span className={`supplier-status ${supplier.is_open_now ? 'supplier-status-open' : 'supplier-status-closed'}`}>
+                      {supplier.is_open_now ? 'Open now' : 'Closed'}
+                    </span>
+                  )}
+                </div>
+                <div className="supplier-card-content">
+                <p className="supplier-category">{SUPPLIER_CATEGORIES.find((category) => category.value === supplier.supplier_type)?.label || 'Campus supplier'}</p>
                 <div className="supplier-card-header">
-                  <div className="supplier-name">{supplier.name}</div>
-                  {supplier.tags.length > 0 ? (
+                  <h3 className="supplier-name"><a href={`?screen=supplier-detail&supplier_id=${encodeURIComponent(supplier.id)}`}>{supplier.name}</a></h3>
+                </div>
+                <div className="supplier-info supplier-meta"><Icon name="pin" /><span>{formatPlace(supplier.place)}{supplier.floor ? ` · Level ${supplier.floor}` : ''}</span></div>
+                <div className="supplier-info supplier-meta"><Icon name="clock" /><span>{formatHours(supplier) || 'Opening hours not listed'}</span></div>
+                  {supplier.tags?.length > 0 ? (
                     <ul className="supplier-tags" aria-label="Supplier tags">
                       {supplier.tags.map((tag) => (
                         <li key={tag} className="supplier-tag">{tag}</li>
                       ))}
                     </ul>
                   ) : null}
-                </div>
-                <div className="supplier-info">
-                  <strong>Location:</strong> {formatPlace(supplier.place)}
-                  {supplier.floor ? `, Level ${supplier.floor}` : ''}
-                </div>
-                {formatHours(supplier) ? (
-                  <div className="supplier-info">
-                    <strong>Hours:</strong> {formatHours(supplier)}
-                    {/* Worked out by Supplier Service in campus time, the same
-                        answer Order Service uses to accept or refuse an order. */}
-                    {typeof supplier.is_open_now === 'boolean' ? (
-                      <span className={`supplier-status ${supplier.is_open_now ? 'supplier-status-open' : 'supplier-status-closed'}`}>
-                        {supplier.is_open_now ? 'Open now' : 'Closed'}
-                      </span>
-                    ) : null}
-                  </div>
-                ) : null}
                 <div className="supplier-card-actions">
                   <button
                     className="btn btn-primary btn-block"
                     onClick={() => onQuickOpenModal(supplier)}
                     disabled={!supplier.is_active || !supplier.is_open_now}
                   >
-                    Create Request
+                    Create Request<Icon name="arrow" />
                   </button>
                 </div>
-              </div>
+                </div>
+              </article>
             ))}
           </div>
 
