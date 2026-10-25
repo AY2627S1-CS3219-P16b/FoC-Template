@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import OrderCard from "./OrderCard";
 import Icon from "./Icon";
+import OrderActionButton from "./OrderActionButton";
 
-export default function CourierOrdersSection({ orders, currentUserId, onAcceptOrder, hasActiveTask }) {
+export default function CourierOrdersSection({ orders, currentUserId, onAcceptOrder, hasActiveTask, pendingOrderActions = {} }) {
   const [search, setSearch] = useState("");
   const openOrders = orders.filter((order) => order.status === "OPEN");
   const filteredOrders = openOrders.filter((order) => [order.supplierName, order.deliveryLocation, order.pickupLocation].join(" ").toLowerCase().includes(search.toLowerCase()));
@@ -20,7 +21,7 @@ export default function CourierOrdersSection({ orders, currentUserId, onAcceptOr
       {filteredOrders.length ? <div className="orders-grid">{filteredOrders.map((order) => <OrderCard key={order.id} order={order}>
         {order.requesterId === currentUserId ? <span className="order-action-hint">Your own request</span>
           : hasActiveTask ? <button type="button" className="btn btn-secondary" disabled>Active assignment in progress</button>
-          : <button type="button" className="btn btn-primary" onClick={() => onAcceptOrder(order.id)}>Accept Order<Icon name="arrow" /></button>}
+          : <OrderActionButton action="accept" pendingAction={pendingOrderActions[order.id]} onClick={() => onAcceptOrder(order.id)} />}
       </OrderCard>)}</div> : <div className="empty-state"><span className="empty-icon"><Icon name="bag" /></span><h3>{search ? "No errands match your search" : "You're all caught up"}</h3><p>{search ? "Try another supplier or location." : "New errands will appear here when students post them."}</p>{search && <button type="button" className="btn btn-secondary" onClick={() => setSearch("")}>Clear search</button>}</div>}
     </section>
   );

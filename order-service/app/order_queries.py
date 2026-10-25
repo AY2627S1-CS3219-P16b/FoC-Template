@@ -221,6 +221,7 @@ def get_user_orders(
     *,
     role: Literal["requester", "courier"],
     status: str | None = None,
+    view: Literal["active", "past", "all"] = "all",
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, object]:
@@ -234,10 +235,17 @@ def get_user_orders(
             raise ValueError("status must be a valid order status")
     if role not in {"requester", "courier"}:
         raise ValueError("role must be a valid role")
+    if view not in {"active", "past", "all"}:
+        raise ValueError("view must be active, past or all")
     owner_column = (
         orders.c.requester_user_id if role == "requester" else orders.c.courier_user_id
     )
     filters = [owner_column == user_id]
+    past_statuses = ("COMPLETED", "CANCELLED", "EXPIRED", "REJECTED")
+    if view == "active":
+        filters.append(orders.c.status.not_in(past_statuses))
+    elif view == "past":
+        filters.append(orders.c.status.in_(past_statuses))
     if status is not None:
         filters.append(orders.c.status == status)
 

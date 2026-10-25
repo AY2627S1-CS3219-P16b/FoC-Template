@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 import os
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
@@ -143,6 +144,7 @@ def create_app() -> FastAPI:
         request: Request,
         role: OrderRole = Query(...),
         status: OrderStatus | None = Query(None),
+        view: Literal["active", "past", "all"] = Query("all"),
         page: int = Query(1, ge=1),
         page_size: int = Query(20, ge=1, le=100),
         caller: CurrentUser = Depends(current_user),
@@ -150,7 +152,7 @@ def create_app() -> FastAPI:
         """List the caller's requests or courier assignments."""
         with request.app.state.database.connect() as connection:
             return OrderPageResponse.model_validate(queries.get_user_orders(
-                connection, caller.id, role=role, status=status,
+                connection, caller.id, role=role, status=status, view=view,
                 page=page, page_size=page_size,
             ))
 

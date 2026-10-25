@@ -45,6 +45,10 @@ reusing a key with changed client fields returns 409.
 Creation and pending cancel/confirm actions return 202. Poll order details until
 the pending state resolves. Lists support `page` and `page_size` (maximum 100);
 order lists also support `status`, and browsing supports `supplier_id`.
+My requests/assignments also support `view=active|past|all` (default `all`).
+Past includes `COMPLETED`, `CANCELLED`, `EXPIRED`, and `REJECTED`; credit
+processing and other unfinished states remain active. Filters apply before
+pagination, and `status` can further narrow a view.
 Unexpired open orders are visible to authenticated users. Other orders and
 history are limited to their requester and assigned courier.
 
