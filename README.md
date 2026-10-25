@@ -12,10 +12,10 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 ## Team Members
 
-| Name | Role |
-| ----- | ----- |
-| Chong Yi Jie | Your ownership |
-| Jessica Ange Xu | Your ownership |
+| Name             | Role           |
+| ---------------- | -------------- |
+| Chong Yi Jie     | Your ownership |
+| Jessica Ange Xu  | Your ownership |
 | Aurora Yufei Shi | Your ownership |
 
 ---
@@ -25,14 +25,14 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 Five microservices, each with its own PostgreSQL database, plus a React frontend.
 Services communicate over HTTP and never read each other's tables.
 
-| Service | Port | Responsibility |
-| --- | --- | --- |
-| `user-service` | 8000 | Accounts, roles, JWT signing |
-| `supplier-service` | 8001 | Supplier catalogue, campus places, opening hours |
-| `credit-service` | 8002 | Balances, reservations, credit ledger |
-| `order-service` | 8003 | Errands, assignments, order history, credit jobs |
-| `faq-service` | 8004 | General FAQ support; local BGE retrieval and Anthropic answers |
-| `frontend` | 5173 | React + Vite UI; proxies `/api/v1/*` to the services |
+| Service            | Port | Responsibility                                                 |
+| ------------------ | ---- | -------------------------------------------------------------- |
+| `user-service`     | 8000 | Accounts, roles, JWT signing                                   |
+| `supplier-service` | 8001 | Supplier catalogue, campus places, opening hours               |
+| `credit-service`   | 8002 | Balances, reservations, credit ledger                          |
+| `order-service`    | 8003 | Errands, assignments, order history, credit jobs               |
+| `faq-service`      | 8004 | General FAQ support; local BGE retrieval and Anthropic answers |
+| `frontend`         | 5173 | React + Vite UI; proxies `/api/v1/*` to the services           |
 
 Two background workers deliver credit operations asynchronously through a
 transactional outbox: `user-credit-worker` (initial credits on registration) and
@@ -89,9 +89,3 @@ microservice lives in its own top-level folder with its own Dockerfile.
   one-service-per-folder skeleton** for core implementation.
 
 ---
-
-## AI assistance
-
-FAQ support includes AI-assisted implementation, tests and documentation, as well
-as assistant-proposed technology choices discussed with the user. Prompts, scope,
-verification and pending human review are recorded in [the AI usage log](ai/usage-log.md).
