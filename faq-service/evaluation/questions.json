@@ -1,0 +1,18 @@
+[
+  {"question": "Do I need to be an NUS student to join?", "expected": "Who can use FoC?"},
+  {"question": "What does my password need to contain?", "expected": "How do I create an account?"},
+  {"question": "Why does it say invalid email or password?", "expected": "Why can't I log in?"},
+  {"question": "How many points do I get when I sign up?", "expected": "How many credits do I start with?"},
+  {"question": "What does reserved balance mean?", "expected": "What is the difference between available and reserved credits?"},
+  {"question": "Will I get my credits back if nobody takes my errand?", "expected": "What happens to my credits if my request is cancelled or expires?"},
+  {"question": "Can I pay real money to get more credits?", "expected": "Can I buy, transfer or withdraw credits?"},
+  {"question": "How do I tell the runner my delivery address?", "expected": "How do I tell the courier where to deliver?"},
+  {"question": "Can I cancel once a courier has accepted?", "expected": "Can I cancel my request?"},
+  {"question": "Can I arrange a delivery for tomorrow?", "expected": "Can I reorder or schedule an errand for later?"},
+  {"question": "When will I receive my reward for delivering?", "expected": "When do I get paid for an errand?"},
+  {"question": "Can I suggest a shop that is not in the app?", "expected": "Can I request items from somewhere that isn't listed?"},
+  {"question": "Where do I change my Telegram handle?", "expected": "How do I update my profile?"},
+  {"question": "What will the weather be tomorrow?", "expected": null},
+  {"question": "Explain quantum mechanics", "expected": null},
+  {"question": "Write a JavaScript sorting algorithm", "expected": null}
+]

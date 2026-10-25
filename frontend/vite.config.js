@@ -10,6 +10,7 @@ export default defineConfig({
     // Supplier paths are listed first: Vite matches keys in order, and both
     // services share the /api prefix.
     proxy: {
+      '/api/v1/faq': process.env.FAQ_API_PROXY_TARGET || 'http://localhost:8004',
       '/api/v1/suppliers': process.env.SUPPLIER_API_PROXY_TARGET || 'http://localhost:8001',
       '/api/v1/places': process.env.SUPPLIER_API_PROXY_TARGET || 'http://localhost:8001',
       '/api/v1/supplier-changes': process.env.SUPPLIER_API_PROXY_TARGET || 'http://localhost:8001',

@@ -1,11 +1,15 @@
 # Start Friend on Campus locally
 
-This guide covers the User, Supplier, Credit and Order services, and React frontend.
+This guide covers the User, Supplier, Credit, Order and FAQ services, and React frontend.
 Run commands from the repository root unless a step says otherwise.
 
 ## Run with Docker
 
-Requires Docker Desktop running and ports 5173 and 8000–8003 free.
+Requires Docker Desktop running and ports 5173 and 8000–8004 free.
+
+Existing installations: add a new `FAQ_DB_PASSWORD` to the root `.env` without
+regenerating any existing secrets. Add `ANTHROPIC_API_KEY` to enable FAQ answers;
+embeddings run locally and need no AWS credentials. See [FAQ setup](faq-service/README.md).
 
 ### First-time setup (once per machine)
 
@@ -17,7 +21,7 @@ Skip if `.env` and `user-service/keys/` already exist.
 
    ```bash
    [ -e .env ] && echo ".env already exists; keep it" || bash -c '
-   for k in USER_SERVICE_KEY ORDER_SERVICE_KEY USER_DB_PASSWORD SUPPLIER_DB_PASSWORD CREDIT_DB_PASSWORD ORDER_DB_PASSWORD; do
+   for k in USER_SERVICE_KEY ORDER_SERVICE_KEY USER_DB_PASSWORD SUPPLIER_DB_PASSWORD CREDIT_DB_PASSWORD ORDER_DB_PASSWORD FAQ_DB_PASSWORD; do
      echo "$k=$(openssl rand -hex 32)"
    done' > .env
    ```
@@ -65,6 +69,7 @@ docker compose stop            # stop, keep data
 | Supplier API | <http://localhost:8001/docs> |
 | Credit API   | <http://localhost:8002/docs> |
 | Order API    | <http://localhost:8003/docs> |
+| FAQ API      | <http://localhost:8004/docs> |
 
 ### Database ports (development override)
 
@@ -80,6 +85,7 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d
 | `user-db`     | 5434 |
 | `credit-db`   | 5435 |
 | `order-db`    | 5436 |
+| `faq-db`      | 5437 |
 
 Use the same `-f` flags with `ps`, `stop` and `down`.
 

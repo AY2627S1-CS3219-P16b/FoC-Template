@@ -67,6 +67,23 @@ services:
     volumes:
       - order-db-data:/var/lib/postgresql/data
 
+  faq-db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: faq_db
+      POSTGRES_USER: faq_service
+      POSTGRES_PASSWORD: ${FAQ_DB_PASSWORD:?Set FAQ_DB_PASSWORD in .env}
+    networks:
+      - faq-data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U faq_service -d faq_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - faq-db-data:/var/lib/postgresql/data
+
   user-service:
     build: ./user-service
     image: foc/user-service
@@ -233,6 +250,34 @@ services:
     healthcheck:
       disable: true
 
+  faq-service:
+    build: ./faq-service
+    image: foc/faq-service
+    restart: unless-stopped
+    init: true
+    networks:
+      - edge
+      - services
+      - faq-data
+    environment:
+      DATABASE_URL: postgresql+psycopg://faq_service:${FAQ_DB_PASSWORD:?Set FAQ_DB_PASSWORD in .env}@faq-db:5432/faq_db
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-5-5}
+      FAQ_MIN_SIMILARITY: ${FAQ_MIN_SIMILARITY:-0.65}
+      FAQ_REQUESTS_PER_MINUTE: ${FAQ_REQUESTS_PER_MINUTE:-30}
+    volumes:
+      - ./faq-service/docs:/app/docs:ro
+    ports:
+      - "127.0.0.1:8004:8004"
+    depends_on:
+      faq-db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   frontend:
     build: ./frontend
     image: foc/frontend
@@ -245,6 +290,7 @@ services:
       SUPPLIER_API_PROXY_TARGET: http://supplier-service:8001
       CREDIT_API_PROXY_TARGET: http://credit-service:8002
       ORDER_API_PROXY_TARGET: http://order-service:8003
+      FAQ_API_PROXY_TARGET: http://faq-service:8004
     ports:
       - "127.0.0.1:5173:5173"
     depends_on:
@@ -275,6 +321,9 @@ networks:
   order-data:
     driver: bridge
     internal: true
+  faq-data:
+    driver: bridge
+    internal: true
 
 volumes:
   user-db-data:
@@ -282,3 +331,4 @@ volumes:
   supplier-images:
   credit-db-data:
   order-db-data:
+  faq-db-data:

@@ -26,6 +26,11 @@ services:
     ports:
       - "127.0.0.1:5436:5432"
 
+  faq-db:
+    networks: [dev-db]
+    ports:
+      - "127.0.0.1:5437:5432"
+
 networks:
   dev-db:
     driver: bridge
