@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import Navbar from "./components/Navbar";
 import SuppliersSection, { SupplierImage } from "./components/SuppliersSection";
 import OrderCard from "./components/OrderCard";
+import OrderActionButton from "./components/OrderActionButton";
 import CreateOrderModal from "./components/CreateOrderModal";
 import RequesterOrdersSection from "./components/RequesterOrdersSection";
 import CourierOrdersSection from "./components/CourierOrdersSection";
@@ -437,14 +438,14 @@ function SupplierDetailScreen({ supplier, onChoose }) {
   );
 }
 
-function CourierDetailScreen({ order, onAccept }) {
+function CourierDetailScreen({ order, onAccept, pendingAction }) {
   if (!order) return <main className="main-content"><div className="empty-state"><h3>No order selected</h3><p>Browse open orders to choose an errand.</p><button className="btn btn-secondary" onClick={() => goToScreen("courier-orders")}>Browse Open Orders</button></div></main>;
   return (
     <main className="main-content">
       <div className="section-header"><div><p className="page-eyebrow">Courier workspace</p><h2>Errand details</h2></div></div>
       <div className="active-order-layout"><OrderCard order={order}>
         <button className="btn btn-secondary" onClick={() => goToScreen("courier-orders")}>Back</button>
-        <button className="btn btn-primary" onClick={onAccept} disabled={order.status !== "OPEN"}>Accept Order</button>
+        <OrderActionButton action="accept" onClick={onAccept} disabled={order.status !== "OPEN"} pendingAction={pendingAction} />
       </OrderCard></div>
     </main>
   );
@@ -646,6 +647,7 @@ export default function App() {
   const [refreshTick, setRefreshTick] = useState(0);
   const creatingOrder = useRef(null);
   const pendingActions = useRef(new Set());
+  const [pendingOrderActions, setPendingOrderActions] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [transactionCount, setTransactionCount] = useState(0);
   const [availableCredits, setAvailableCredits] = useState(0);
@@ -770,6 +772,7 @@ export default function App() {
   const performOrderAction = async (orderId, action) => {
     if (pendingActions.current.has(orderId)) return false;
     pendingActions.current.add(orderId);
+    setPendingOrderActions((current) => ({ ...current, [orderId]: action }));
     try {
       storeOrder(await changeOrder(accessToken, orderId, action));
       return true;
@@ -778,6 +781,11 @@ export default function App() {
       return false;
     } finally {
       pendingActions.current.delete(orderId);
+      setPendingOrderActions((current) => {
+        const next = { ...current };
+        delete next[orderId];
+        return next;
+      });
     }
   };
 
@@ -841,6 +849,7 @@ export default function App() {
         <CourierDetailScreen
           order={routeOrder}
           onAccept={() => handleAcceptOrder(routeOrder.id)}
+          pendingAction={pendingOrderActions[routeOrder?.id]}
         />
         {orderError && <div className="action-error" role="alert">{orderError}</div>}
       </>
@@ -901,6 +910,7 @@ export default function App() {
         {role === "REQUESTER" && activeTab === "my-requests" && (
           <RequesterOrdersSection
             orders={orders.filter((o) => o.requesterId === user.id)}
+            pendingOrderActions={pendingOrderActions}
             onCancelOrder={handleCancelOrder}
             onConfirmDelivery={handleConfirmDelivery}
             onNewRequestClick={() => setActiveTab("suppliers")}
@@ -911,6 +921,7 @@ export default function App() {
         {role === "COURIER" && activeTab === "courier-browse" && (
           <CourierOrdersSection
             orders={orders}
+            pendingOrderActions={pendingOrderActions}
             currentUserId={user.id}
             onAcceptOrder={handleAcceptOrder}
             hasActiveTask={!!activeCourierTask}
@@ -920,6 +931,7 @@ export default function App() {
         {role === "COURIER" && activeTab === "courier-active" && (
           <CourierActiveSection
             activeTask={activeCourierTask}
+            pendingAction={pendingOrderActions[activeCourierTask?.id]}
             onMarkPickedUp={handleMarkPickedUp}
             onMarkDelivered={handleMarkDelivered}
             onFindNewTask={() => setActiveTab("courier-browse")}

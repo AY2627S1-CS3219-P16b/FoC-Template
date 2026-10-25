@@ -76,6 +76,7 @@ button { touch-action: manipulation; }
 .btn-sm { min-height: 33px; padding: 6px 11px; font-size: 12px; }
 .btn-block { display: flex; width: 100%; }
 .btn:disabled { opacity: .48; cursor: not-allowed; }
+.btn[aria-busy="true"] { opacity: .8; cursor: progress; }
 .form-group { margin-bottom: 17px; }
 .form-group label, .form-group .form-label { margin-bottom: 6px; color: #4b5870; font-size: 12px; font-weight: 600; }
 .form-group input, .form-group textarea, .form-group select, .search-input, .filter-select, .place-tree-trigger { min-height: 41px; padding: 9px 12px; border: 1px solid #dce2ec; border-radius: 8px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; }

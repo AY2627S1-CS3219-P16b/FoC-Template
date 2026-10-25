@@ -1,8 +1,9 @@
 import React from "react";
 import OrderCard from "./OrderCard";
 import Icon from "./Icon";
+import OrderActionButton from "./OrderActionButton";
 
-export default function CourierActiveSection({ activeTask, onMarkPickedUp, onMarkDelivered, onFindNewTask }) {
+export default function CourierActiveSection({ activeTask, onMarkPickedUp, onMarkDelivered, onFindNewTask, pendingAction }) {
   const steps = ["Accepted", "Picked up", "Delivered", "Completed"];
   const currentStep = { ACCEPTED: 0, PICKED_UP: 1, DELIVERED: 2, COMPLETING: 2, COMPLETED: 3 }[activeTask?.status] ?? 0;
   return (
@@ -15,8 +16,8 @@ export default function CourierActiveSection({ activeTask, onMarkPickedUp, onMar
             activeTask.status === "DELIVERED" ? <div className="notice-box order-notice">Delivered. Waiting for the requester to confirm receipt.</div>
               : activeTask.status === "COMPLETING" ? <div className="notice-box order-notice">Receipt confirmed. Your credit reward is being processed.</div> : null
           }>
-            {activeTask.status === "ACCEPTED" && <button type="button" className="btn btn-primary" onClick={() => onMarkPickedUp(activeTask.id)}>Mark Picked Up<Icon name="arrow" /></button>}
-            {activeTask.status === "PICKED_UP" && <button type="button" className="btn btn-primary" onClick={() => onMarkDelivered(activeTask.id)}>Mark Delivered<Icon name="arrow" /></button>}
+            {activeTask.status === "ACCEPTED" && <OrderActionButton action="pickup" pendingAction={pendingAction} onClick={() => onMarkPickedUp(activeTask.id)} />}
+            {activeTask.status === "PICKED_UP" && <OrderActionButton action="deliver" pendingAction={pendingAction} onClick={() => onMarkDelivered(activeTask.id)} />}
           </OrderCard>
         </div>}
     </section>

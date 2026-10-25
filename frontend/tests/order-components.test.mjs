@@ -12,7 +12,7 @@ before(async () => {
   // Attach Vite's optional HMR transport to an unlistened server: rendering
   // tests need no network socket or browser server.
   server = await createServer({ configFile: false, plugins: [react()], logLevel: "error", server: { middlewareMode: true, hmr: { server: createHttpServer() }, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true } });
-  for (const name of ["OrderCard", "CourierOrdersSection", "RequesterOrdersSection", "CourierActiveSection", "Navbar"]) {
+  for (const name of ["OrderCard", "OrderActionButton", "CourierOrdersSection", "RequesterOrdersSection", "CourierActiveSection", "Navbar"]) {
     components[name] = (await server.ssrLoadModule("/src/components/" + name + ".jsx")).default;
   }
 });
@@ -77,4 +77,41 @@ test("navigation adapts to mode and only offers admin access to admins", () => {
   assert.match(admin, /Open Orders/);
   assert.match(admin, /Active Assignment/);
   assert.match(admin, /Admin Access/);
+});
+
+test("pending order buttons show progress and become usable again when the action finishes", () => {
+  for (const [action, label] of [["accept", "Accepting…"], ["cancel", "Cancelling…"], ["confirm", "Confirming…"], ["pickup", "Updating…"], ["deliver", "Updating…"]]) {
+    const pending = render("OrderActionButton", { action, pendingAction: action, onClick: noop });
+    assert.match(pending, /disabled=""/);
+    assert.match(pending, /aria-busy="true"/);
+    assert.ok(pending.includes(label));
+    const finished = render("OrderActionButton", { action, onClick: noop });
+    assert.doesNotMatch(finished, /disabled=""|aria-busy="true"/);
+    assert.ok(!finished.includes(label));
+  }
+  // Polling can advance the order's status before its original request returns.
+  // The next action must remain disabled until that request has finished.
+  const nextAction = render("OrderActionButton", { action: "deliver", pendingAction: "pickup", onClick: noop });
+  assert.match(nextAction, /disabled=""/);
+  assert.match(nextAction, /Mark Delivered/);
+});
+
+test("progress is tied to the matching order across requester, courier and active assignment views", () => {
+  const other = { ...order, id: "another-order" };
+  const pendingOrderActions = { [order.id]: "accept" };
+  const courier = render("CourierOrdersSection", { orders: [order, other], currentUserId: "courier-1", onAcceptOrder: noop, hasActiveTask: false, pendingOrderActions });
+  assert.equal((courier.match(/disabled=""/g) || []).length, 1);
+  assert.match(courier, /Accepting…/);
+  assert.match(courier, /Accept Order/);
+
+  const requesterProps = { onCancelOrder: noop, onConfirmDelivery: noop, onNewRequestClick: noop };
+  const requester = render("RequesterOrdersSection", { ...requesterProps, orders: [order, { ...other, status: "DELIVERED" }], pendingOrderActions: { [order.id]: "cancel", [other.id]: "confirm" } });
+  assert.equal((requester.match(/aria-busy="true"/g) || []).length, 2);
+  assert.match(requester, /Cancelling…/);
+  assert.match(requester, /Confirming…/);
+
+  for (const [status, action] of [["ACCEPTED", "pickup"], ["PICKED_UP", "deliver"]]) {
+    const active = render("CourierActiveSection", { activeTask: { ...order, status }, pendingAction: action, onMarkPickedUp: noop, onMarkDelivered: noop, onFindNewTask: noop });
+    assert.match(active, /disabled="" aria-busy="true"[^>]*>Updating…/);
+  }
 });
