@@ -74,6 +74,12 @@ suspending one does.
 Every write is recorded in `supplier_audit_logs` in the same transaction as the
 change, so a change cannot exist without its audit entry.
 
+Updates and deactivation acquire a PostgreSQL supplier row lock (`SELECT ...
+FOR UPDATE OF suppliers`) before reading previous values. Concurrent changes
+to the same supplier wait until that transaction commits or rolls back, so
+audit history reflects the values actually replaced. Browsing does not take
+this lock.
+
 `DELETE` is a soft delete: it sets `is_active` to false so the supplier leaves
 browsing while orders that reference it still resolve. `PATCH` with
 `is_active: true` restores it. Admins can pass `include_inactive=true` when
@@ -376,5 +382,6 @@ development override (`docker compose -f compose.yaml -f compose.dev.yaml up -d
 supplier-db`; see the [startup guide](../startup.md)).
 
 The first command runs checks without database access. The second also tests
-imports, stored relationships, duplicate prevention, and foreign-key
-constraints in a temporary PostgreSQL schema, then removes that test schema.
+imports, stored relationships, duplicate prevention, foreign-key constraints,
+and concurrent supplier changes with accurate audit history in temporary
+PostgreSQL schemas, then removes those test schemas.

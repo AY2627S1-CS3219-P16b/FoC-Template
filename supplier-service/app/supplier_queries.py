@@ -177,17 +177,23 @@ def list_suppliers(connection, *, page=1, page_size=DEFAULT_PAGE_SIZE,
     return [dict(row) for row in connection.execute(statement).mappings()]
 
 
-def get_supplier(connection, supplier_id):
+def get_supplier(connection, supplier_id, *, for_update=False):
     """One supplier regardless of active status, or None.
 
     Order Service resolves suppliers referenced by existing orders, so a
     deactivated supplier is returned with its flag rather than hidden.
+
+    Admin writes lock only the supplier row before reading its previous values.
+    The caller's transaction holds the lock through the write and audit entry.
     """
     statement = (
         select(*_SUPPLIER_COLUMNS)
         .select_from(_SUPPLIER_SOURCE)
         .where(suppliers.c.id == supplier_id)
     )
+    if for_update:
+        # The source includes an outer join; lock the supplier, not its places.
+        statement = statement.with_for_update(of=suppliers)
     row = connection.execute(statement).mappings().one_or_none()
     return dict(row) if row is not None else None
 
