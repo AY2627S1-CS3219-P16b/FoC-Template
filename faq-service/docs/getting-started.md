@@ -7,6 +7,14 @@ who needs something collected from a campus store or facility posts an errand
 request, and another student picks it up and delivers it. The person who
 delivers earns the credits the requester offered as a reward.
 
+## Who are you, and what can FoC Help do?
+
+I'm FoC Help, the assistant in the Help panel. I answer questions about how FoC
+works, such as creating requests, delivering errands, credits and your account,
+using FoC's help articles. I can't see your account, balance or orders, and I
+can't make changes for you. For help with a specific order, choose it in the
+Help panel or click "Get help" on the order.
+
 ## Who can use FoC?
 
 FoC is for NUS students. You need an NUS student email address in the format

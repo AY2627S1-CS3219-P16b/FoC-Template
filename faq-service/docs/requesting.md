@@ -86,6 +86,17 @@ When the courier marks your errand as delivered, a "Confirm Delivery" button
 appears on the request under "My Requests". Clicking it completes the errand and
 pays the courier the reward credit.
 
+## It says delivered, but I didn't receive my items. What should I do?
+
+Do not click "Confirm Delivery" until you have your items, because confirming
+completes the errand and pays the courier the reward credit. First check your
+delivery location and any delivery instructions you gave, in case the courier
+left the items there. FoC does not currently have a dispute process, so the
+request stays "Delivered" until you confirm it.
+
+<!-- REVIEW: No dispute flow, delivery confirmation timeout or admin contact
+channel exists. Update when any of them is added. -->
+
 ## Can I accept my own request?
 
 No. Requesters can never accept their own requests, even in Courier Mode.
@@ -105,6 +116,26 @@ courier's name or contact details.
 <!-- REVIEW: The frontend shows "Assigned courier" only (api/orders.js:63).
 Update when courier names or contact details are shown, and when
 requester–courier chat (N2H2) and translation (N2H3) are built. -->
+
+## Where is my courier?
+
+FoC does not show your courier's live location. The status under "My Requests"
+shows how far along your errand is: "Accepted" means a courier has taken it and
+is heading to the store, "Picked up" means they have collected your items and
+are on the way to you, and "Delivered" means they say the items have arrived.
+The status updates automatically as the courier progresses.
+
+## My courier is late and my items haven't arrived. What can I do?
+
+If your courier is taking a long time and your items still haven't arrived,
+check the status under "My Requests", which updates automatically when the
+courier picks up and delivers your items. Once a courier accepts your request,
+FoC does not set a delivery deadline, and the request can no longer be
+cancelled. FoC does not currently show the courier's contact details, so you
+cannot message them directly.
+
+<!-- REVIEW: Update when the requester and courier can see each other's
+contact details after acceptance, or an admin contact channel exists. -->
 
 ## Can I reorder or schedule an errand for later?
 

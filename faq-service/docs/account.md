@@ -47,6 +47,5 @@ once by the team that runs FoC.
 
 No. FoC does not support deleting accounts.
 
-<!-- REVIEW: Deletion is not planned. Once an admin contact channel exists
-(user-service-review-notes.md issue 3), add: "If you no longer want to use FoC,
-ask an admin to disable your account." -->
+<!-- REVIEW: Deletion is not planned. Once an admin contact channel exists, add:
+"If you no longer want to use FoC, ask an admin to disable your account." -->

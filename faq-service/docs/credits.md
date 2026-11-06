@@ -74,4 +74,5 @@ never go below zero, and the same credits cannot be spent twice.
 
 No. Credits can only be earned by completing errands or received as your
 starting allocation. You cannot buy them, send them to another student directly,
-or exchange them for money.
+or exchange them for money. Credits are never refunded as cash: when a request
+is cancelled or expires, its credit returns to your FoC balance.

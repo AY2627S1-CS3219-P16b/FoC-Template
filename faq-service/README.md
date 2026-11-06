@@ -152,24 +152,16 @@ python -m pytest tests -q
 python -m app.evaluate
 ```
 
-Unit/API tests inject providers and need no downloads, database or paid calls.
-Set `FAQ_TEST_DATABASE_URL` to a disposable pgvector database whose name ends in
-`_test` to also run the real database integration check.
+Unit and API tests use fake providers, so they need no downloads, database or
+paid calls. To also run the database integration test, set
+`FAQ_TEST_DATABASE_URL` to a disposable pgvector database whose name ends in
+`_test`.
 
-`app.evaluate` runs the real local model on curated questions under `evaluation/`.
-It checks expected FAQs in the top four, reports unrelated queries rejected by
-the threshold, and measures warm embedding plus in-memory search latency. It
-does not measure PostgreSQL or Claude latency. This is a small smoke set, not a
-broad quality benchmark.
-
-Initial local smoke run (2026-10-25): 59 chunks, expected evidence retrieved for
-13/13 supported questions, and 3/3 clearly unrelated questions rejected by the
-threshold. Warm embedding plus in-memory search measured 6.83 ms median and
-9.93 ms p95 on the development machine. These timings exclude PostgreSQL and
-Claude and will vary across machines.
-The final Docker image also passed the same 13/13 and 3/3 checks with
-`--network none`; warm embedding plus in-memory search measured 18.21 ms median
-and 26.82 ms p95 inside that container.
+`app.evaluate` checks that the curated questions in `evaluation/questions.json`
+find their expected FAQ entry in the top four, and that unrelated questions are
+rejected. It is a small smoke test, not a quality benchmark. Latest results and
+the reasoning behind the similarity threshold are in
+[evaluation/RESULTS.md](evaluation/RESULTS.md).
 
 ## References
 
