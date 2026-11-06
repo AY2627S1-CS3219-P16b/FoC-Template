@@ -92,7 +92,7 @@ def update_supplier(connection, *, actor_id: UUID, supplier_id: UUID,
     written, so the audit entry shows the actual change rather than the whole
     record.
     """
-    current = get_supplier(connection, supplier_id)
+    current = get_supplier(connection, supplier_id, for_update=True)
     if current is None:
         return None
     if "place_id" in changes:
@@ -129,7 +129,7 @@ def deactivate_supplier(connection, *, actor_id: UUID, supplier_id: UUID,
     The row stays so orders that already reference it still resolve. Setting
     is_active back to true through the update endpoint restores it.
     """
-    current = get_supplier(connection, supplier_id)
+    current = get_supplier(connection, supplier_id, for_update=True)
     if current is None:
         return None
     if not current["is_active"]:
