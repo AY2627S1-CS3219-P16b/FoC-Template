@@ -9,6 +9,7 @@ from sqlalchemy import text
 from .admin_queries import (
     DuplicatePlaceError,
     DuplicateSupplierError,
+    InvalidHoursError,
     NoChangeError,
     UnknownPlaceError,
     count_audit_logs,
@@ -185,6 +186,8 @@ def create_app() -> FastAPI:
                     connection, actor_id=UUID(admin.id), supplier_id=supplier_id,
                     changes=body.model_dump(exclude_unset=True), reason=reason,
                 )
+            except InvalidHoursError as error:
+                raise HTTPException(422, str(error)) from error
             except UnknownPlaceError as error:
                 raise HTTPException(404, "Unknown place.") from error
             except DuplicateSupplierError as error:

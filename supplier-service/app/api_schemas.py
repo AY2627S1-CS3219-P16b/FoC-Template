@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .classification import normalize_tags, validate_supplier_type
-from .hours import is_open, normalize_days
+from .hours import check_hours, is_open, normalize_days
 
 
 class PlaceSummary(BaseModel):
@@ -137,6 +137,14 @@ class SupplierCreate(BaseModel):
     @classmethod
     def known_days(cls, value: list[str] | None) -> list[str] | None:
         return None if value is None else normalize_days(value)
+
+    @model_validator(mode="after")
+    def hours_can_be_open(self):
+        # A PATCH may send only one of the two; update_supplier then checks
+        # the pair against the stored row.
+        if self.opening_time is not None and self.closing_time is not None:
+            check_hours(self.opening_time, self.closing_time)
+        return self
 
 
 class SupplierUpdate(SupplierCreate):

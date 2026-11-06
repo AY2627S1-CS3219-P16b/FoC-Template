@@ -237,6 +237,9 @@ Order Service can refuse an order placed while a supplier is shut.
   Octobox, every day.
 - **Trading past midnight** is stored with a closing time _earlier_ than the
   opening time, as Supersnacks does with `18:00` to `02:00`.
+- **Equal opening and closing times are refused** (422), because the range
+  would never be open. That includes `00:00` to `00:00`; use `00:00` to `23:59`.
+  A PATCH that changes one time is checked against the stored other one.
 - **Operating days** are stored as codes in week order, e.g.
   `{MON,TUE,WED,THU,FRI}`.
 

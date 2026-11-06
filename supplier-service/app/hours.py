@@ -21,6 +21,19 @@ OPEN_ALL_DAY = (time(0, 0), time(23, 59))
 DAY_ALIASES = {"DAILY": DAYS, "WEEKDAYS": DAYS[:5], "WEEKENDS": DAYS[5:]}
 
 
+def check_hours(opening: time, closing: time) -> None:
+    """Refuse a range that would never be open.
+
+    Equal times read as "closes the moment it opens". Admins who mean "never
+    closes" usually type 00:00 to 00:00, so the message names the spelling FoC
+    stores for that.
+    """
+    if opening == closing:
+        raise ValueError(
+            "opening and closing times must differ; use 00:00 to 23:59 for open 24 hours"
+        )
+
+
 def normalize_days(values: list[str]) -> list[str]:
     """Upper-case, de-duplicated, in week order; at least one day."""
     days = set()

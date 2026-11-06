@@ -7,7 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.database import create_database_engine
-from app.hours import CAMPUS_TIMEZONE, DAYS, is_open, normalize_days, parse_days
+from app.hours import CAMPUS_TIMEZONE, DAYS, check_hours, is_open, normalize_days, parse_days
 from app.schema import create_schema, metadata, suppliers
 
 WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"]
@@ -67,6 +67,13 @@ class IsOpenTests(unittest.TestCase):
         # 01:00 UTC on Monday is 09:00 on campus.
         utc = datetime(2026, 10, 12, 1, 0, tzinfo=timezone.utc)
         self.assertTrue(is_open(time(8, 0), time(18, 0), WEEKDAYS, utc))
+
+    def test_equal_times_are_refused_because_they_never_open(self):
+        for same in (time(0, 0), time(9, 0)):
+            with self.subTest(time=same), self.assertRaises(ValueError):
+                check_hours(same, same)
+        check_hours(time(0, 0), time(23, 59))
+        check_hours(time(18, 0), time(2, 0))
 
 
 @unittest.skipUnless(os.getenv("RUN_POSTGRES_TESTS") == "1", "Set RUN_POSTGRES_TESTS=1 for PostgreSQL checks")
