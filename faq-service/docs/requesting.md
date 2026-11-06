@@ -8,6 +8,14 @@ location (both required), optional delivery instructions, and an acceptance
 deadline, then submit. 1 credit is reserved as the courier's reward, and you can
 track the request under "My Requests".
 
+## Do I need to pay for the items?
+
+Yes, before you create the request. FoC errands are collect-only: the courier
+picks up and delivers your items but never pays for them. Make sure your items
+are already paid for (for example, a prepaid order or online print payment) or
+need no payment, such as collecting a parcel, and mention this in the item
+description. Credits are only the courier's reward, not payment for the items.
+
 ## What acceptance deadlines can I choose?
 
 You can choose "Within 30 mins", "Within 45 mins" or "Within 1 hour". The
@@ -23,14 +31,6 @@ Type your delivery location in the "Delivery Location" field when you create the
 request. Be specific so the courier can find you, for example "COM3 Level 1,
 outside the lift lobby". Use "Delivery Instructions" for anything extra, such as
 "leave it at the reception counter". The courier sees both on the order.
-
-<!-- REVIEW: Delivery location is free text (CreateOrderModal.jsx:99-105); the
-API only checks it is not empty. Update this answer if it becomes a campus place
-picker (PlaceTreeSelect already exists) or saved locations (N1 bookmarking).
-Couriers currently have no way to contact the requester. Consider showing the
-requester's profile contact (contact preference, Telegram handle, phone) to the
-assigned courier only, after acceptance, or adding chat (N2H2). Update this
-answer, couriers.md and account.md if that changes. -->
 
 ## Why does my request say "Credit processing is pending"?
 
@@ -67,6 +67,13 @@ Once a courier has accepted the request, it can no longer be cancelled.
 <!-- REVIEW: No cancellation or dispute flow exists after acceptance. Update if
 the team adds one (e.g. N1 failed-order/dispute management). -->
 
+## Can I edit my request after creating it?
+
+No. To change the items, delivery location or deadline, cancel the request
+while it is still open and create a new one. Your reserved credit is returned a
+moment after cancelling. Once a courier has accepted your request, it can no
+longer be cancelled or changed.
+
 ## What happens if nobody accepts my request?
 
 When the acceptance deadline passes, the request expires automatically and your
@@ -101,8 +108,6 @@ requester–courier chat (N2H2) and translation (N2H3) are built. -->
 
 ## Can I reorder or schedule an errand for later?
 
-Not yet. Each request is created for immediate pickup with an acceptance
-deadline of up to 1 hour.
-
-<!-- REVIEW: Scheduled errands and reordering are N1 ideas, not selected or
-built. Remove or update this answer if the team implements them. -->
+No. Each request is created for immediate pickup with an acceptance deadline of
+up to 1 hour. To request the same items again, create a new request from the
+supplier's page.

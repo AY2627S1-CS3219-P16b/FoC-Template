@@ -32,10 +32,8 @@ needs fixing.
 
 Login fails when the email is not registered or the password is wrong. For
 security, FoC shows the same "Invalid email or password" message in both cases.
-Accounts that have been suspended or disabled by an admin also cannot log in.
-
-<!-- REVIEW: The backlog (N1.4) plans a 15-minute lockout after 5 failed logins
-within 10 minutes. This is not implemented yet. Add an answer once it is. -->
+Accounts that have been suspended or disabled by an admin also cannot log in,
+and see the same message.
 
 ## How long do I stay logged in?
 
