@@ -18,6 +18,7 @@ import {
   listCreditLedger,
 } from "./api/credits";
 import { changeOrder, createOrder, getOrder, loadOrders, orderForDisplay } from "./api/orders";
+import { helpOrderChoices, publishHelpOrders } from "./utils/orderHelp";
 import { fetchSupplier, fetchSuppliers, formatHours, formatPlace } from "./api/suppliers";
 import {
   getUserProfile,
@@ -684,6 +685,11 @@ export default function App() {
       o.courierId === user.id &&
       ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETING"].includes(o.status),
   );
+
+  // Let the Help panel offer the user's own active orders.
+  useEffect(() => {
+    publishHelpOrders(helpOrderChoices(orders, user.id));
+  }, [orders, user.id]);
 
   // Quick Open Modal from Supplier List
   const handleQuickOpenModal = (supplier) => {

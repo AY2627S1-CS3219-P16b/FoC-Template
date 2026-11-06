@@ -21,12 +21,8 @@ automatically, so the order will disappear shortly.
 
 ## Can I accept more than one errand at a time?
 
-<!-- REVIEW: The backlog (F4.3.1) says a courier with an active assignment cannot
-accept another order, but the code does not enforce this yet
-(order_queries.assign_courier). Write the answer once the team decides. -->
-
-FoC shows your current errand under "Active Assignment". Finish your current
-errand before taking on another one.
+No. You can only have one errand in progress at a time. Your current errand is
+shown under "Active Assignment". Finish it before accepting another one.
 
 ## What are the steps after I accept an errand?
 
@@ -46,24 +42,17 @@ until then the errand shows that credit processing is pending.
 
 ## How many credits do I earn per errand?
 
-Each errand currently pays 1 credit.
-
-<!-- REVIEW: Tied to the hard-coded 1-credit reward; see credits.md. -->
+Each errand pays 1 credit.
 
 ## Can I cancel an errand after accepting it?
 
 No. Once you accept an errand, only you can progress it, and there is currently
 no option to hand it back. Only accept errands you can complete.
 
-<!-- REVIEW: No courier un-assign or dispute flow exists. Update if one is added. -->
-
 ## Do I pay for the items?
 
 FoC does not handle payment for the items themselves: paying the store is
 outside the platform. Credits are only the reward for completing the errand.
-
-<!-- REVIEW: Confirm the team's guidance on how requesters and couriers settle
-item payment (e.g. pay on delivery) and add it here. -->
 
 ## Can I see the requester's contact details?
 

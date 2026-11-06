@@ -38,6 +38,16 @@ test("order headings show the supplier, with full identifiers and instructions r
   assert.match(html, /1 credit/);
 });
 
+test("only the viewer's own orders offer a Get help link", () => {
+  assert.doesNotMatch(render("OrderCard", { order }), /Get help/);
+  assert.match(render("OrderCard", { order, helpRole: "requester" }), /<button type="button" class="order-help-link">.*Get help<\/button>/);
+  const props = { onCancelOrder: noop, onConfirmDelivery: noop, onNewRequestClick: noop };
+  assert.match(render("RequesterOrdersSection", { ...props, orders: [order] }), /Get help/);
+  assert.doesNotMatch(render("CourierOrdersSection", { orders: [order], currentUserId: "someone-else", onAcceptOrder: noop, hasActiveTask: false }), /Get help/);
+  const active = render("CourierActiveSection", { activeTask: { ...order, status: "ACCEPTED" }, onMarkPickedUp: noop, onMarkDelivered: noop, onFindNewTask: noop });
+  assert.match(active, /Get help/);
+});
+
 test("couriers cannot accept their own orders or accept while already assigned", () => {
   const own = render("CourierOrdersSection", { orders: [order], currentUserId: order.requesterId, onAcceptOrder: noop, hasActiveTask: false });
   assert.match(own, /Your own request/);
@@ -73,6 +83,7 @@ test("navigation adapts to mode and only offers admin access to admins", () => {
   assert.match(requester, /Suppliers/);
   assert.match(requester, /My Requests/);
   assert.match(requester, /20 available credits/);
+  assert.match(requester, /aria-label="Help"/);
   assert.doesNotMatch(requester, /Admin Access|Open Orders/);
   const admin = render("Navbar", { ...props, role: "COURIER", user: { name: "Admin", authRole: "ADMIN" } });
   assert.match(admin, /Open Orders/);

@@ -45,7 +45,7 @@ once by the team that runs FoC.
 
 ## Can I delete my account?
 
-Account deletion is not currently available.
+No. FoC does not support deleting accounts.
 
-<!-- REVIEW: No deletion endpoint exists. Confirm the team's position (e.g. ask
-an admin to disable the account) and update. -->
+<!-- REVIEW: Deletion is not planned. Once an admin contact channel exists, add:
+"If you no longer want to use FoC, ask an admin to disable your account." -->

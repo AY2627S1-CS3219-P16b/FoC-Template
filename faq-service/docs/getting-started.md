@@ -7,6 +7,14 @@ who needs something collected from a campus store or facility posts an errand
 request, and another student picks it up and delivers it. The person who
 delivers earns the credits the requester offered as a reward.
 
+## Who are you, and what can FoC Help do?
+
+I'm FoC Help, the assistant in the Help panel. I answer questions about how FoC
+works, such as creating requests, delivering errands, credits and your account,
+using FoC's help articles. I can't see your account, balance or orders, and I
+can't make changes for you. For help with a specific order, choose it in the
+Help panel or click "Get help" on the order.
+
 ## Who can use FoC?
 
 FoC is for NUS students. You need an NUS student email address in the format
@@ -32,10 +40,8 @@ needs fixing.
 
 Login fails when the email is not registered or the password is wrong. For
 security, FoC shows the same "Invalid email or password" message in both cases.
-Accounts that have been suspended or disabled by an admin also cannot log in.
-
-<!-- REVIEW: The backlog (N1.4) plans a 15-minute lockout after 5 failed logins
-within 10 minutes. This is not implemented yet. Add an answer once it is. -->
+Accounts that have been suspended or disabled by an admin also cannot log in,
+and see the same message.
 
 ## How long do I stay logged in?
 

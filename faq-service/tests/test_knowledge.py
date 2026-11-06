@@ -36,7 +36,7 @@ def test_duplicate_questions_are_rejected(tmp_path):
 
 def test_real_knowledge_base_contains_only_student_faqs():
     corpus = load_corpus(Path(__file__).resolve().parents[1] / "docs")
-    assert len(corpus.chunks) == 59
+    assert len(corpus.chunks) == 65
     assert len({chunk.source_file for chunk in corpus.chunks}) == 6
     assert all("<!--" not in chunk.text and "REVIEW:" not in chunk.text for chunk in corpus.chunks)
     supplier = next(chunk for chunk in corpus.chunks if "isn't listed" in chunk.question)

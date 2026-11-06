@@ -32,7 +32,7 @@ export function RequesterOrdersView({ orders = [], onCancelOrder, onConfirmDeliv
         const notice = ["RESERVING", "CANCELLING", "EXPIRING", "COMPLETING"].includes(order.status)
           ? <div className="notice-box order-notice">Credit processing is pending. Your request will update automatically.</div>
           : order.status === "REJECTED" ? <div className="action-error order-notice">Credits could not be reserved. Check your balance before creating another request.</div> : null;
-        return <OrderCard key={order.id} order={order} notice={notice}>
+        return <OrderCard key={order.id} order={order} notice={notice} helpRole="requester">
           {order.status === "OPEN" && <OrderActionButton action="cancel" pendingAction={pendingOrderActions[order.id]} onClick={() => onCancelOrder(order.id)} />}
           {order.status === "DELIVERED" && <OrderActionButton action="confirm" pendingAction={pendingOrderActions[order.id]} onClick={() => onConfirmDelivery(order.id)} />}
         </OrderCard>;

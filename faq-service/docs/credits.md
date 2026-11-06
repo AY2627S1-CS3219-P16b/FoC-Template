@@ -37,12 +37,8 @@ cancelled or expires, reserved credits return to your available balance.
 
 ## How much does a request cost?
 
-Each request currently offers a reward of 1 credit. The credit is reserved from
-your available balance when you create the request.
-
-<!-- REVIEW: The frontend hard-codes a 1-credit reward (CreateOrderModal.jsx:47),
-while the Order API accepts any positive amount. Update this answer if requesters
-can choose the reward. -->
+Each request offers a reward of 1 credit. The credit is reserved from your
+available balance when you create the request.
 
 ## When are my credits taken?
 
@@ -78,4 +74,5 @@ never go below zero, and the same credits cannot be spent twice.
 
 No. Credits can only be earned by completing errands or received as your
 starting allocation. You cannot buy them, send them to another student directly,
-or exchange them for money.
+or exchange them for money. Credits are never refunded as cash: when a request
+is cancelled or expires, its credit returns to your FoC balance.

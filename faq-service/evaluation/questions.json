@@ -12,6 +12,11 @@
   {"question": "When will I receive my reward for delivering?", "expected": "When do I get paid for an errand?"},
   {"question": "Can I suggest a shop that is not in the app?", "expected": "Can I request items from somewhere that isn't listed?"},
   {"question": "Where do I change my Telegram handle?", "expected": "How do I update my profile?"},
+  {"question": "Is my food on the way yet?", "expected": "Where is my courier?"},
+  {"question": "The runner still hasn't arrived after an hour", "expected": "My courier is late and my items haven't arrived. What can I do?"},
+  {"question": "App shows delivered but nothing arrived", "expected": "It says delivered, but I didn't receive my items. What should I do?"},
+  {"question": "Can I get a refund in cash?", "expected": "Can I buy, transfer or withdraw credits?"},
+  {"question": "who are u", "expected": "Who are you, and what can FoC Help do?"},
   {"question": "What will the weather be tomorrow?", "expected": null},
   {"question": "Explain quantum mechanics", "expected": null},
   {"question": "Write a JavaScript sorting algorithm", "expected": null}
