@@ -99,7 +99,7 @@ export default function CreateOrderModal({
             <label>Delivery Location *</label>
             <input
               type="text"
-              placeholder="e.g. Location 1"
+              placeholder="e.g. COM3 Level 1, outside the lift lobby"
               value={deliveryLocation}
               onChange={(e) => setDeliveryLocation(e.target.value)}
               required
@@ -110,7 +110,7 @@ export default function CreateOrderModal({
             <label>Delivery Instructions</label>
             <input
               type="text"
-              placeholder="e.g. Instructions 1"
+              placeholder="e.g. Call me on arrival, or leave it at the reception counter"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
             />
