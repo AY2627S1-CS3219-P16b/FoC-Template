@@ -43,6 +43,8 @@ button { touch-action: manipulation; }
 .user-avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: 0 0 auto; border-radius: 50%; background: #edf0f7; color: #526181; font-size: 13px; }
 .logout-btn { margin-left: 0; font-size: 12px; }
 .logout-btn .ui-icon { width: 16px; height: 16px; }
+.help-nav-btn { gap: 6px; font-size: 12px; }
+.help-nav-btn .ui-icon { width: 16px; height: 16px; }
 .header-nav-container { border-top: 1px solid #f0f2f7; }
 .nav-tabs { max-width: 1200px; padding: 7px 24px; margin: 0 auto; gap: 6px; overflow-x: auto; scrollbar-width: none; }
 .nav-tabs::-webkit-scrollbar { display: none; }
@@ -111,9 +113,14 @@ button { touch-action: manipulation; }
 .requests-view-switch button:hover { background: #f4f6fa; }
 .requests-view-switch button[aria-pressed="true"] { background: var(--primary-soft); color: #2448ad; font-weight: 650; }
 .requests-pagination { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 24px; color: #526078; font-size: 12px; }
-.orders-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+.orders-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: stretch; }
 .orders-grid > :only-child { grid-column: 1 / -1; width: 100%; max-width: 760px; }
-.order-card { margin: 0; padding: 23px; }
+/* Cards in a row share one height; the footer stays at the bottom when a
+   longer pickup location wraps to more lines. */
+.order-card { display: flex; flex-direction: column; margin: 0; padding: 23px; }
+.order-card > .order-card-footer { margin-top: auto; }
+/* An opened "View details" should only grow its own card, not its row-mate. */
+.orders-grid:has(.order-details[open]) > .order-card:not(:has(.order-details[open])) { align-self: start; }
 .order-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .order-card-heading { min-width: 0; }
 .order-card-heading h3 { margin-top: 12px; font-size: 19px; line-height: 1.35; letter-spacing: -.4px; overflow-wrap: anywhere; }
@@ -154,6 +161,12 @@ button { touch-action: manipulation; }
 .order-facts dt { margin-bottom: 4px; color: #69778f; font-size: 10px; font-weight: 650; text-transform: uppercase; letter-spacing: .45px; }
 .order-facts dd { margin: 0; color: #526078; font-size: 12px; overflow-wrap: anywhere; white-space: pre-wrap; }
 .order-facts code { font-size: 11px; overflow-wrap: anywhere; }
+/* "View details" and "Get help" sit together on the left; actions stay right. */
+.order-details:has(+ .order-help-link) { flex: 0 1 auto; }
+.order-details[open]:has(+ .order-help-link) { flex: 1 1 100%; }
+.order-help-link { margin-right: auto; display: inline-flex; align-items: center; gap: 5px; padding: 8px 0; border: 0; background: none; font: inherit; font-size: 12px; font-weight: 550; color: #617392; cursor: pointer; }
+.order-help-link:hover { color: #34445f; text-decoration: underline; }
+.order-help-link .ui-icon { width: 14px; height: 14px; }
 .order-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .order-actions:empty { display: none; }
 .order-action-hint { color: #929bac; font-size: 12px; padding: 8px 0; }
@@ -301,7 +314,8 @@ tbody tr:last-child td { border-bottom: 0; }
   .header-actions { gap: 8px; grid-column: 2; grid-row: 1; }
   .role-switcher { grid-row: 2; grid-column: 1 / -1; margin: 0; display: grid; grid-template-columns: 1fr 1fr; }
   .role-btn { padding: 8px 6px; }
-  .logout-label { display: none; }
+  .logout-label, .help-nav-label { display: none; }
+  .help-nav-btn.btn { padding: 7px 9px; min-height: 35px; }
   .logout-btn.btn { padding: 7px 9px; min-height: 35px; }
   .credit-badge-btn { min-height: 35px; padding: 6px 8px; }
   .nav-tabs { padding: 7px 12px; gap: 2px; }

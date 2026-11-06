@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { askFaq } from "../api/faq";
+import { ORDER_HELP_EVENT, orderHelpContext, subscribeHelpOrders } from "../utils/orderHelp";
+import { statusLabel } from "../utils/orderPresentation";
 import "./FaqSupport.css";
 
 const SUGGESTIONS = ["How do I create an account?", "How do credits work?", "Can I cancel my request?"];
@@ -7,9 +9,13 @@ const SUGGESTIONS = ["How do I create an account?", "How do credits work?", "Can
 export default function FaqSupport() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
+  // Conversation entries: "user" and "assistant" messages, plus local-only
+  // "order" cards and "menu" lists, so they appear where the user is looking.
   const [messages, setMessages] = useState([]);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(null);
+  // The signed-in user's active orders, published by App; empty when logged out.
+  const [orderChoices, setOrderChoices] = useState([]);
   const inputRef = useRef(null);
   const launcherRef = useRef(null);
   const endRef = useRef(null);
@@ -25,6 +31,36 @@ export default function FaqSupport() {
 
   useEffect(() => () => activeRequest.current?.abort(), []);
 
+  const addEntry = (entry) => setMessages((previous) => [
+    ...previous.slice(-39), { id: crypto.randomUUID(), ...entry },
+  ]);
+
+  const showOrder = (context) => setMessages((previous) => {
+    const last = previous[previous.length - 1];
+    if (last?.role === "order" && last.context.orderId === context.orderId) return previous;
+    return [...previous.slice(-39), { id: crypto.randomUUID(), role: "order", context }];
+  });
+
+  useEffect(() => {
+    // A "Get help" link sends an order; the navbar Help button sends null.
+    const openHelp = (event) => {
+      if (event.detail) showOrder(event.detail);
+      setOpen(true);
+    };
+    window.addEventListener(ORDER_HELP_EVENT, openHelp);
+    return () => window.removeEventListener(ORDER_HELP_EVENT, openHelp);
+  }, []);
+
+  useEffect(() => subscribeHelpOrders(setOrderChoices), []);
+
+  // Show each order's current status as App refreshes orders.
+  const liveContext = (context) => {
+    const choice = orderChoices.find(({ order }) => order.id === context.orderId);
+    return choice ? orderHelpContext(choice.order, choice.role) : context;
+  };
+  const lastMenuOrOrder = [...messages].reverse().find(({ role }) => role === "order" || role === "menu");
+  const currentOrder = lastMenuOrOrder?.role === "order" ? liveContext(lastMenuOrOrder.context) : null;
+
   const close = () => {
     setOpen(false);
     launcherRef.current?.focus();
@@ -39,8 +75,7 @@ export default function FaqSupport() {
     setPending(true);
     setError(null);
     setQuestion("");
-    const id = crypto.randomUUID();
-    setMessages((previous) => [...previous.slice(-39), { id, role: "user", text }]);
+    addEntry({ role: "user", text });
     try {
       const result = await askFaq(text, { signal: controller.signal });
       if (controller.signal.aborted) return;
@@ -72,6 +107,54 @@ export default function FaqSupport() {
     inputRef.current?.focus();
   };
 
+  const suggestionButtons = (questions) => (
+    <div className="faq-suggestions">
+      {questions.map((text) => (
+        <button key={text} type="button" onClick={() => submit(null, text)} disabled={pending}>{text}</button>
+      ))}
+    </div>
+  );
+
+  const helpMenu = (key) => (
+    <div key={key} className="faq-welcome">
+      {orderChoices.length > 0 && (
+        <div className="faq-order-choices">
+          <p>Need help with an order?</p>
+          <ul>
+            {orderChoices.map(({ order, role }) => (
+              <li key={order.id}>
+                <button type="button" onClick={() => showOrder(orderHelpContext(order, role))}>
+                  <span>
+                    <strong>{order.supplierName || "Order"}</strong>
+                    <small>{role === "courier" ? "Your delivery" : "Your request"}</small>
+                  </span>
+                  <span className="faq-order-status">{statusLabel(order.status)}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p>{orderChoices.length > 0 ? "Or ask a general question" : "How can I help?"}</p>
+      {suggestionButtons(SUGGESTIONS)}
+    </div>
+  );
+
+  const orderCard = (entry) => {
+    const context = liveContext(entry.context);
+    return (
+      <div key={entry.id} className="faq-order-context" aria-label={`Help for ${context.name}`}>
+        <div className="faq-order-heading">
+          <strong>{context.title}</strong>
+          <span className="faq-order-status">{context.statusLabel}</span>
+        </div>
+        <p>{context.summary}</p>
+        {suggestionButtons(context.questions)}
+        <small>Order details aren't shared with the AI.</small>
+      </div>
+    );
+  };
+
   return (
     <>
       <button
@@ -97,40 +180,39 @@ export default function FaqSupport() {
             <button type="button" className="faq-icon-button" aria-label="Close help" onClick={close}>×</button>
           </header>
           <p id="faq-support-description" className="faq-description">
-            AI answers from our FAQ docs. Each question is answered separately.
-            I can explain how FoC works, but can’t access your account or orders.
-            Please don’t share passwords or personal details.
+            AI answers from our FAQ. Don’t share passwords or personal details.
           </p>
+          {currentOrder && (
+            // Outside the scrolling transcript, so switching stays in reach.
+            <div className="faq-order-bar">
+              <span>Helping with <strong>{currentOrder.name}</strong></span>
+              <button type="button" onClick={() => messages[messages.length - 1]?.role !== "menu" && addEntry({ role: "menu" })}>Other help</button>
+            </div>
+          )}
           <div className="faq-transcript" role="log" aria-label="Support conversation" aria-live="polite" aria-relevant="additions">
-            {messages.length === 0 && (
-              <div className="faq-welcome">
-                <p>How can I help?</p>
-                <div className="faq-suggestions">
-                  {SUGGESTIONS.map((text) => (
-                    <button key={text} type="button" onClick={() => submit(null, text)} disabled={pending}>{text}</button>
-                  ))}
-                </div>
-              </div>
-            )}
-            {messages.map((message) => (
-              <article key={message.id} className={`faq-message faq-message-${message.role}`}>
-                <span className="faq-speaker">{message.role === "user" ? "You" : "FoC Help"}</span>
-                <p>{message.text}</p>
-                {message.sources?.length > 0 && (
-                  <div className="faq-sources">
-                    <span>Sources</span>
-                    {message.sources.map((source) => (
-                      <details key={source.id}>
-                        <summary>{source.question}</summary>
-                        <p>{source.answer}</p>
-                        <small>{source.title}</small>
-                      </details>
-                    ))}
-                  </div>
-                )}
-              </article>
-            ))}
-            {pending && <p className="faq-pending" role="status">Looking through the FAQs…</p>}
+            {messages.length === 0 && helpMenu("welcome")}
+            {messages.map((message) => {
+              if (message.role === "menu") return helpMenu(message.id);
+              if (message.role === "order") return orderCard(message);
+              return (
+                <article key={message.id} className={`faq-message faq-message-${message.role}`}>
+                  <span className="faq-speaker">{message.role === "user" ? "You" : "FoC Help"}</span>
+                  <p>{message.text}</p>
+                  {message.sources?.length > 0 && (
+                    <details className="faq-sources">
+                      <summary>Based on {message.sources.length} FAQ {message.sources.length === 1 ? "answer" : "answers"}</summary>
+                      {message.sources.map((source) => (
+                        <div key={source.id} className="faq-source">
+                          <strong>{source.question}</strong>
+                          <p>{source.answer}</p>
+                        </div>
+                      ))}
+                    </details>
+                  )}
+                </article>
+              );
+            })}
+            {pending && <p className="faq-pending" role="status">Finding an answer…</p>}
             <div ref={endRef} />
           </div>
           {error && (

@@ -1,6 +1,7 @@
 import React from "react";
 import Icon from "./Icon";
 import { acceptanceDeadline, creditLabel, formatOrderDate, shortOrderId, statusLabel, statusTone } from "../utils/orderPresentation";
+import { openOrderHelp } from "../utils/orderHelp";
 
 export function OrderStatus({ status }) {
   return <span className={`badge status-badge status-${statusTone(status)}`}><span className="status-dot" />{statusLabel(status)}</span>;
@@ -19,7 +20,8 @@ export function OrderFacts({ order, requester, courier }) {
   return <dl className="order-facts">{facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value || "Not available"}</dd></div>)}</dl>;
 }
 
-export default function OrderCard({ order, children, notice }) {
+// helpRole ("requester" or "courier") adds a "Get help" link for the viewer's own orders.
+export default function OrderCard({ order, children, notice, helpRole }) {
   const deadline = order.expiresAt ? acceptanceDeadline(order.expiresAt) : order.deadline;
   const urgent = order.status === "OPEN" && order.expiresAt
     && new Date(order.expiresAt).getTime() - Date.now() <= 5 * 60000;
@@ -43,6 +45,8 @@ export default function OrderCard({ order, children, notice }) {
       {notice}
       <div className="order-card-footer">
         <details className="order-details"><summary>View details</summary><OrderFacts order={order} /></details>
+        {helpRole && <button type="button" className="order-help-link" onClick={() => openOrderHelp(order, helpRole)}>
+          <Icon name="help" />Get help</button>}
         {children && <div className="order-actions">{children}</div>}
       </div>
     </article>

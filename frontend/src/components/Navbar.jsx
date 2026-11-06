@@ -1,5 +1,6 @@
 import React from "react";
 import Icon from "./Icon";
+import { openHelp } from "../utils/orderHelp";
 
 export default function Navbar({ role, setRole, roleError, switchingRole, activeTab, setActiveTab, availableCredits, user, onLogout }) {
   const navigate = (tab) => {
@@ -26,6 +27,7 @@ export default function Navbar({ role, setRole, roleError, switchingRole, active
         </div>
         <div className="header-actions">
           <button type="button" className="credit-badge-btn" onClick={() => navigate("credits")} aria-label={(availableCredits ?? 0) + " available credits"}><Icon name="coins" /><strong>{availableCredits ?? 0}</strong><span>credits</span></button>
+          <button type="button" className="btn btn-secondary help-nav-btn" onClick={openHelp} aria-label="Help"><Icon name="help" /><span className="help-nav-label">Help</span></button>
           <span className="header-user"><span className="user-avatar" aria-hidden="true">{(user?.name || "S").slice(0, 1).toUpperCase()}</span><span>{user?.name || "Student"}</span></span>
           <button type="button" className="btn btn-secondary logout-btn" onClick={onLogout} aria-label="Log out"><Icon name="logout" /><span className="logout-label">Log out</span></button>
         </div>
