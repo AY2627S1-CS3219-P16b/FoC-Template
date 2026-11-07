@@ -2,6 +2,7 @@ import React from "react";
 import Icon from "./Icon";
 
 const actions = {
+  unassign: ["Give Back Errand", "Giving back…"],
   accept: ["Accept Order", "Accepting…"],
   cancel: ["Cancel Request", "Cancelling…"],
   confirm: ["Confirm Delivery", "Confirming…"],

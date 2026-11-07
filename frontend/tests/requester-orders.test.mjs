@@ -55,3 +55,25 @@ test("history is not polled and active processing retains fast updates", () => {
   assert.equal(requesterPollDelay("past", []), null);
   assert.equal(requesterPollDelay("all", []), null);
 });
+
+test("only active assigned requests fetch contact and lookup failures keep orders visible", async () => {
+  const originalFetch = globalThis.fetch;
+  const paths = [];
+  globalThis.fetch = async (url) => {
+    const path = new URL(url, "http://localhost").pathname;
+    paths.push(path);
+    if (path.endsWith("/contact")) {
+      return path.includes("accepted")
+        ? Response.json({ display_name: "Courier", contact_preference: "TELEGRAM", contact: "@courier" })
+        : Response.json({ detail: "Unavailable" }, { status: 503 });
+    }
+    return Response.json({ items: ["OPEN", "ACCEPTED", "DELIVERED", "COMPLETING", "COMPLETED"].map((status) => ({ id: status.toLowerCase(), status })), total_pages: 1 });
+  };
+  try {
+    const { items } = await listRequesterOrders("token");
+    assert.deepEqual(paths.filter((path) => path.endsWith("/contact")), ["/api/v1/orders/accepted/contact", "/api/v1/orders/delivered/contact"]);
+    assert.equal(items[1].contactDetails.contact, "@courier");
+    assert.equal(items[2].contactError, true);
+    assert.equal(items.length, 5);
+  } finally { globalThis.fetch = originalFetch; }
+});

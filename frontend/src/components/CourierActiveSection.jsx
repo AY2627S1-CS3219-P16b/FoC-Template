@@ -3,7 +3,7 @@ import OrderCard from "./OrderCard";
 import Icon from "./Icon";
 import OrderActionButton from "./OrderActionButton";
 
-export default function CourierActiveSection({ activeTask, onMarkPickedUp, onMarkDelivered, onFindNewTask, pendingAction }) {
+export default function CourierActiveSection({ activeTask, onMarkPickedUp, onMarkDelivered, onUnassign, onFindNewTask, pendingAction }) {
   const steps = ["Accepted", "Picked up", "Delivered", "Completed"];
   const currentStep = { ACCEPTED: 0, PICKED_UP: 1, DELIVERED: 2, COMPLETING: 2, COMPLETED: 3 }[activeTask?.status] ?? 0;
   return (
@@ -13,10 +13,11 @@ export default function CourierActiveSection({ activeTask, onMarkPickedUp, onMar
         : <div className="active-order-layout">
           <ol className="delivery-steps" aria-label="Delivery progress">{steps.map((step, index) => <li key={step} className={index <= currentStep ? "is-reached" : ""} aria-current={index === currentStep ? "step" : undefined}><span>{index < currentStep ? "✓" : index + 1}</span>{step}</li>)}</ol>
           <OrderCard order={activeTask} helpRole="courier" notice={
-            activeTask.status === "DELIVERED" ? <div className="notice-box order-notice">Delivered. Waiting for the requester to confirm receipt.</div>
-              : activeTask.status === "COMPLETING" ? <div className="notice-box order-notice">Receipt confirmed. Your credit reward is being processed.</div> : null
+            activeTask.status === "DELIVERED" ? <div className="notice-box order-notice">Delivered. Waiting for receipt confirmation; this happens automatically after the configured confirmation window.</div>
+              : !activeTask.creditError && activeTask.status === "COMPLETING" ? <div className="notice-box order-notice">Receipt confirmed. Your credit reward is being processed.</div> : null
           }>
             {activeTask.status === "ACCEPTED" && <OrderActionButton action="pickup" pendingAction={pendingAction} onClick={() => onMarkPickedUp(activeTask.id)} />}
+            {activeTask.status === "ACCEPTED" && <OrderActionButton action="unassign" pendingAction={pendingAction} onClick={() => onUnassign(activeTask.id)} />}
             {activeTask.status === "PICKED_UP" && <OrderActionButton action="deliver" pendingAction={pendingAction} onClick={() => onMarkDelivered(activeTask.id)} />}
           </OrderCard>
         </div>}

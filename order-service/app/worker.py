@@ -22,7 +22,7 @@ def database_now(connection):
     return connection.execute(select(func.clock_timestamp())).scalar_one()
 
 
-def deliver_one(engine, client: CreditClient) -> bool:
+def deliver_one(engine, client: CreditClient, max_attempts: int = 10) -> bool:
     """Hold the order lock through delivery and acknowledgement, one job at a time."""
     with engine.begin() as connection:
         jobs = queries.get_pending_credit_jobs(connection, now=database_now(connection), batch_size=1)
@@ -40,6 +40,10 @@ def deliver_one(engine, client: CreditClient) -> bool:
         except (OSError, ValueError, RuntimeError, HTTPProtocolError) as error:
             # Do not expose credentials or discard jobs on persistent errors.
             code = f"HTTP_{error.code}" if isinstance(error, HTTPError) else type(error).__name__
+            if job["attempts"] + 1 >= max_attempts:
+                queries.fail_credit_job(connection, job, now=database_now(connection), error_code=code)
+                logger.error("credit needs attention job=%s order=%s error=%s", job["id"], job["order_id"], code)
+                return True
             delay = min(300, 2 ** min(job["attempts"] + 1, 8))
             queries.reschedule_credit_job(
                 connection, job["id"], last_error_code=code,
@@ -59,6 +63,10 @@ def main() -> None:
     engine = create_database_engine()
     client = CreditClient(os.getenv("CREDIT_SERVICE_URL", "http://localhost:8002"),
                           os.environ["ORDER_SERVICE_KEY"])
+    window = timedelta(hours=float(os.getenv("AUTO_CONFIRM_RECEIPT_HOURS", "24")))
+    max_attempts = int(os.getenv("CREDIT_JOB_MAX_ATTEMPTS", "10"))
+    if window <= timedelta(0) or max_attempts < 1:
+        raise ValueError("Auto-confirm hours and maximum attempts must be positive")
     stop = Event()
     for event in (signal.SIGTERM, signal.SIGINT):
         signal.signal(event, lambda *_: stop.set())
@@ -68,7 +76,8 @@ def main() -> None:
             try:
                 with engine.begin() as connection:
                     queries.expire_open_orders(connection, now=database_now(connection))
-                delivered = deliver_one(engine, client)
+                    queries.auto_confirm_receipts(connection, now=database_now(connection), window=window)
+                delivered = deliver_one(engine, client, max_attempts)
             except SQLAlchemyError as error:
                 logger.warning("Order queue unavailable; retrying error=%s", type(error).__name__)
             stop.wait(0 if delivered else 1)

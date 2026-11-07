@@ -638,7 +638,7 @@ def get_pending_credit_jobs(
             orders.c.credit_amount, orders.c.status.label("order_status"),
         )
         .join(orders, orders.c.id == credit_jobs.c.order_id)
-        .where(credit_jobs.c.completed_at.is_(None), credit_jobs.c.next_attempt_at <= now)
+        .where(credit_jobs.c.completed_at.is_(None), credit_jobs.c.failed_at.is_(None), credit_jobs.c.next_attempt_at <= now)
         .order_by(credit_jobs.c.next_attempt_at, credit_jobs.c.created_at, credit_jobs.c.id)
         .limit(batch_size)
         .with_for_update(of=orders, skip_locked=True)
@@ -781,3 +781,75 @@ def reject_order_reservation(
     Uncertain outcomes and temporary failures must be reconciled/retried instead.
     """
     return _finish_credit_job(connection, job_id, rejected_at, error_code)
+
+
+def unassign_courier(connection: Connection, order_id: str, *, courier_user_id: str) -> dict:
+    with connection.begin_nested():
+        order = connection.execute(select(orders).where(orders.c.id == order_id)
+                                   .with_for_update()).mappings().one_or_none()
+        if order is None:
+            raise OrderNotFoundError("Order does not exist.")
+        if order["courier_user_id"] != courier_user_id:
+            raise OrderAccessDeniedError("Only the assigned courier can give back this errand.")
+        if order["status"] != "ACCEPTED":
+            raise OrderStateError("Only errands that have not been picked up can be given back.")
+        now = connection.execute(select(func.clock_timestamp())).scalar_one()
+        updated = connection.execute(update(orders).where(orders.c.id == order_id)
+            .values(status="OPEN", courier_user_id=None, updated_at=now).returning(orders)).mappings().one()
+        connection.execute(insert(order_log).values(order_id=order_id, actor_user_id=courier_user_id,
+            action="UNASSIGN_COURIER", previous_status="ACCEPTED", new_status="OPEN", created_at=now))
+        return dict(updated)
+
+
+def get_contact_user_id(connection: Connection, order_id: str, *, viewer_user_id: str) -> str:
+    order = connection.execute(select(orders).where(orders.c.id == order_id)
+                               .with_for_update()).mappings().one_or_none()
+    if order is None:
+        raise OrderNotFoundError("Order does not exist.")
+    if (order["status"] not in ("ACCEPTED", "PICKED_UP", "DELIVERED") or
+            viewer_user_id not in (order["requester_user_id"], order["courier_user_id"])):
+        raise OrderAccessDeniedError("Contact is available only to participants while the errand is active.")
+    return order["courier_user_id"] if viewer_user_id == order["requester_user_id"] else order["requester_user_id"]
+
+
+def auto_confirm_receipts(connection: Connection, *, now: datetime, window, batch_size: int = 100) -> None:
+    with connection.begin_nested():
+        due = connection.execute(select(orders).where(orders.c.status == "DELIVERED",
+            orders.c.updated_at <= now - window).order_by(orders.c.updated_at, orders.c.id)
+            .limit(batch_size).with_for_update(skip_locked=True)).mappings().all()
+        for order in due:
+            connection.execute(update(orders).where(orders.c.id == order["id"])
+                               .values(status="COMPLETING", updated_at=now))
+            connection.execute(insert(credit_jobs).values(order_id=order["id"], operation="TRANSFER",
+                                                         next_attempt_at=now, created_at=now))
+            connection.execute(insert(order_log).values(order_id=order["id"], actor_user_id=None,
+                action="AUTO_CONFIRM_RECEIPT", previous_status="DELIVERED", new_status="COMPLETING", created_at=now))
+
+
+def fail_credit_job(connection: Connection, job: dict, *, now: datetime, error_code: str) -> None:
+    # The worker already holds the order lock. Keep its pending state for safe reconciliation.
+    connection.execute(update(credit_jobs).where(credit_jobs.c.id == job["id"]).values(
+        failed_at=now, last_error_code=error_code, attempts=credit_jobs.c.attempts + 1))
+    connection.execute(update(orders).where(orders.c.id == job["order_id"])
+                       .values(credit_error=error_code, updated_at=now))
+    connection.execute(insert(order_log).values(order_id=job["order_id"], actor_user_id=None,
+        action="CREDIT_JOB_FAILED", outcome="FAILED", previous_status=job["order_status"],
+        new_status=job["order_status"], details={"job_id": job["id"], "error_code": error_code}, created_at=now))
+
+
+def retry_failed_credit(connection: Connection, order_id: str, *, actor_user_id: str) -> dict:
+    order = connection.execute(select(orders).where(orders.c.id == order_id)
+                               .with_for_update()).mappings().one_or_none()
+    if order is None:
+        raise OrderNotFoundError("Order does not exist.")
+    now = connection.execute(select(func.clock_timestamp())).scalar_one()
+    retried = connection.execute(update(credit_jobs).where(credit_jobs.c.order_id == order_id,
+        credit_jobs.c.failed_at.is_not(None), credit_jobs.c.completed_at.is_(None)).values(
+            failed_at=None, attempts=0, next_attempt_at=now, last_error_code=None))
+    if not retried.rowcount:
+        raise OrderStateError("This order has no failed credit job.")
+    updated = connection.execute(update(orders).where(orders.c.id == order_id)
+        .values(credit_error=None, updated_at=now).returning(orders)).mappings().one()
+    connection.execute(insert(order_log).values(order_id=order_id, actor_user_id=actor_user_id,
+        action="RETRY_CREDIT_JOB", previous_status=order["status"], new_status=order["status"], created_at=now))
+    return dict(updated)

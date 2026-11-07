@@ -1,10 +1,12 @@
 """Request and response models for the order service endpoints."""
 
 from typing import Annotated, Literal
+from datetime import datetime, timedelta
+import os
 
 from pydantic import (
     AwareDatetime, BaseModel, ConfigDict, Field, JsonValue, StringConstraints,
-    field_validator,
+    computed_field, field_validator,
 )
 
 
@@ -50,9 +52,17 @@ class OrderResponse(BaseModel):
     delivery_instructions: str | None = None
     credit_amount: int = Field(gt=0, le=2147483647)
     status: OrderStatus
+    credit_error: str | None = None
     expires_at: AwareDatetime
     created_at: AwareDatetime
     updated_at: AwareDatetime
+
+    @computed_field
+    @property
+    def receipt_confirmation_deadline(self) -> datetime | None:
+        if self.status != "DELIVERED":
+            return None
+        return self.updated_at + timedelta(hours=float(os.getenv("AUTO_CONFIRM_RECEIPT_HOURS", "24")))
 
 
 class PageResponse(BaseModel):
@@ -84,3 +94,9 @@ class OrderHistoryPageResponse(PageResponse):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"]
+
+
+class ContactResponse(BaseModel):
+    display_name: RequiredText
+    contact_preference: Literal["TELEGRAM", "PHONE", "EMAIL"] | None = None
+    contact: RequiredText | None = None

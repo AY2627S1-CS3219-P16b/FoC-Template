@@ -2,11 +2,12 @@ import { sendAuthenticatedRequest } from "./client.js";
 
 const BASE_URL = `${import.meta.env?.VITE_ORDER_API_URL || ""}/api/v1/orders`;
 
-export function listRequesterOrders(token, { view = "active", page = 1, pageSize = 10 } = {}) {
+export async function listRequesterOrders(token, { view = "active", page = 1, pageSize = 10 } = {}) {
   const params = new URLSearchParams({ role: "requester", view, page: String(page), page_size: String(pageSize) });
-  return sendAuthenticatedRequest(`${BASE_URL}/me?${params}`, {
+  const result = await sendAuthenticatedRequest(`${BASE_URL}/me?${params}`, {
     token, method: "GET", errorMessage: "Could not load your requests.",
   });
+  return { ...result, items: await Promise.all(result.items.map((order) => withContact(token, order))) };
 }
 
 export function createOrder(token, body, key) {
@@ -49,18 +50,22 @@ export async function loadOrders(token) {
     listAll(token, "/me", { role: "requester", view: "active" }),
     listAll(token, "/me", { role: "courier", view: "active" }),
   ]);
-  return [...new Map(groups.flat().map((order) => [order.id, order])).values()]
+  const orders = [...new Map(groups.flat().map((order) => [order.id, order])).values()]
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  return Promise.all(orders.map((order) => withContact(token, order)));
 }
 
-export function changeOrder(token, id, action) {
-  return sendAuthenticatedRequest(`${BASE_URL}/${encodeURIComponent(id)}/${action}`, {
+export async function changeOrder(token, id, action) {
+  const order = await sendAuthenticatedRequest(`${BASE_URL}/${encodeURIComponent(id)}/${action}`, {
     token, method: "POST", errorMessage: "Could not update this order.",
   });
+  return withContact(token, order);
 }
 
 export function orderForDisplay(order, userId) {
   return {
+    receiptConfirmationDeadline: order.receipt_confirmation_deadline,
+    contact: order.contactDetails, contactError: order.contactError, creditError: order.credit_error,
     id: order.id, supplierId: order.supplier_id, supplierName: order.supplier_name,
     pickupLocation: order.pickup_location, items: order.item_description,
     deliveryLocation: order.delivery_location, instructions: order.delivery_instructions || "None",
@@ -74,4 +79,16 @@ export function orderForDisplay(order, userId) {
     createdAtIso: order.created_at,
     updatedAtIso: order.updated_at,
   };
+}
+
+async function withContact(token, order) {
+  if (!["ACCEPTED", "PICKED_UP", "DELIVERED"].includes(order.status)) return order;
+  try {
+    const contactDetails = await sendAuthenticatedRequest(`${BASE_URL}/${encodeURIComponent(order.id)}/contact`, {
+      token, method: "GET", errorMessage: "Contact details are unavailable.",
+    });
+    return { ...order, contactDetails };
+  } catch {
+    return { ...order, contactError: true };
+  }
 }

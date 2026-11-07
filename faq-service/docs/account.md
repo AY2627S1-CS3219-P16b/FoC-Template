@@ -8,13 +8,11 @@ changed.
 
 ## What information is visible to other students?
 
-Very little. In order listings, couriers see you only as a short ID such as
-"Student 6aac8e5f", and requesters see their courier only as "Assigned courier".
-Your display name, email address, phone number, Telegram handle and profile
-picture are not shown to other students.
-
-<!-- REVIEW: Matches api/orders.js:62-63 today. Update if names or contact
-details become visible (e.g. to the assigned courier, or via chat N2H2). -->
+Open listings identify requesters by a short student ID. After acceptance, the
+requester and assigned courier can see each other's display name and preferred
+contact only (Telegram, phone or email, if provided), through Delivered. Contact
+is hidden once completion processing starts or the errand ends. Other students
+cannot access these details through orders.
 
 ## What does my account status mean?
 

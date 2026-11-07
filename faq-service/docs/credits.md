@@ -44,13 +44,15 @@ available balance when you create the request.
 
 When you create a request, 1 credit moves from your available balance to
 reserved. It is only paid to the courier after the courier marks the errand
-delivered and you confirm that you received it.
+delivered and receipt is confirmed, either by you or automatically after the
+configured window (24 hours by default).
 
 ## When does the courier get paid?
 
 The courier receives the reserved credit after they mark the errand delivered
-and the requester confirms receipt. The transfer happens a moment after
-confirmation; until then the request shows that credit processing is pending.
+and receipt is confirmed by the requester or automatically at the displayed
+deadline (24 hours after delivery by default). The transfer happens shortly
+after confirmation; failed credit processing is flagged for admin attention.
 
 ## What happens to my credits if my request is cancelled or expires?
 
