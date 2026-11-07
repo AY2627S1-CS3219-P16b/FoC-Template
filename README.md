@@ -14,14 +14,17 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 | Team member | Main contributions | Nice-to-have (N2H) contributions |
 | --- | --- | --- |
-| Aurora Yufei Shi | Built the initial UI, Credit Service, and Order Service. | None. |
-| Jessica Ange Xu | Built the User Service and worked on the RAG FAQ assistant. | RAG-based FAQ and support (N2), shared with Yi Jie. |
-| Chong Yi Jie | Built the Supplier Service, updated the UI, and worked on the RAG FAQ assistant. | RAG-based FAQ and support (N2), shared with Jessica. |
+| Chong Yi Jie | Supplier Service; refined frontend UI; supplier seed data | RAG-based FAQ support |
+| Jessica Ange Xu | User Service; built initial frontend | None |
+| Aurora Yufei Shi | Order Service; Credit Service | None |
+
+Shared: each member containerised their own service and implemented its
+sync/async integrations.
 
 The FAQ assistant helps users find answers about accounts, suppliers, errands,
 and credits without leaving the app. It retrieves relevant passages from our
 support documentation and uses them to answer questions, with links to the
-sources. Jessica and Yi Jie contributed to this feature together.
+sources. Yi Jie built this feature.
 
 ---
 

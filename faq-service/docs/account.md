@@ -33,7 +33,8 @@ and reinstate accounts.
 
 Admins can do everything a regular student can, plus: view and update user
 accounts, change account status, promote other students to admin or demote
-them, view all orders, and manage the supplier list. Every admin change to a
+them, view all orders, retry credit processing for orders marked as needing
+attention, and manage the supplier list. Every admin change to a
 user's profile, status or role is recorded in an audit log.
 
 ## How do I become an admin?

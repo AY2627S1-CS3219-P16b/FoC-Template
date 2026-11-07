@@ -13,7 +13,7 @@ Future personal lookups are tracked in [TODO.md](TODO.md).
 2. Local `BAAI/bge-small-en-v1.5` embeddings are generated through FastEmbed's CPU
    ONNX runtime. Model weights are downloaded during the Docker build, not during
    requests. A changed index is replaced in one database transaction.
-3. Questions are embedded locally. pgvector retrieves the four closest FAQ chunks
+3. Questions are embedded locally. pgvector retrieves the five closest FAQ chunks
    by cosine similarity; results below `FAQ_MIN_SIMILARITY` are dropped.
 4. Claude, called directly through Anthropic's API, receives the question and
    retrieved evidence. Its structured answer must cite retrieved source IDs.
@@ -158,9 +158,8 @@ paid calls. To also run the database integration test, set
 `_test`.
 
 `app.evaluate` checks that the curated questions in `evaluation/questions.json`
-find their expected FAQ entry in the top four, and that unrelated questions are
-rejected. It is a small smoke test, not a quality benchmark. Latest results and
-the reasoning behind the similarity threshold are in
+find their expected FAQ entry in the top five, and that unrelated questions are
+rejected. It is a small smoke test, not a quality benchmark. Latest results are in
 [evaluation/RESULTS.md](evaluation/RESULTS.md).
 
 ## References
