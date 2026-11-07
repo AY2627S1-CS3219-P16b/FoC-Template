@@ -36,7 +36,12 @@ Creation requires `Idempotency-Key` (1–200 characters) and this JSON body:
 }
 ```
 
-Use an actual supplier ID and a future acceptance deadline. The requester ID
+Use an actual supplier ID and an acceptance deadline in the next 60 minutes
+(5 minutes' allowance for device clocks). When the supplier closes, the
+deadline must also be at least 10 minutes before its `closes_at` from Supplier
+Service, so a courier who accepts at the last moment can still reach the store;
+otherwise creation returns 422. Accepting needs no supplier call, because every
+deadline already ends before closing. The requester ID
 comes from the JWT; supplier name and pickup details come from Supplier Service.
 Inactive or closed suppliers cannot receive new requests. Supplier edits do not
 rewrite existing orders. Identical creation retries return the original order;

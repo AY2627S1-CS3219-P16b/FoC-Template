@@ -1,15 +1,16 @@
 """Small HTTP clients for Supplier snapshots and idempotent credit actions."""
 
 import json
+from datetime import datetime
 from http.client import HTTPException as HTTPProtocolError
-from typing import Literal
+from typing import Literal, NamedTuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, StrictBool
+from pydantic import AwareDatetime, BaseModel, Field, StrictBool
 
 from .api_schemas import RequiredText
 
@@ -35,10 +36,22 @@ class _Supplier(BaseModel):
     pickup_instructions: str | None = None
     is_active: StrictBool
     is_open_now: StrictBool
+    # End of the current shift; null when the supplier never closes.
+    closes_at: AwareDatetime | None = None
 
 
-def supplier_snapshot(base_url: str, supplier_id: str, token: str) -> tuple[str, str]:
-    """Validate supplier identity/availability and snapshot server-owned pickup details."""
+class SupplierSnapshot(NamedTuple):
+    name: str
+    pickup_location: str
+    closes_at: datetime | None
+
+
+def supplier_snapshot(base_url: str, supplier_id: str, token: str) -> SupplierSnapshot:
+    """Validate supplier identity/availability and snapshot server-owned pickup details.
+
+    closes_at is not stored on the order; create_order uses it once to keep the
+    acceptance deadline before the store shuts.
+    """
     try:
         supplier_id = str(UUID(supplier_id))
     except ValueError:
@@ -63,7 +76,7 @@ def supplier_snapshot(base_url: str, supplier_id: str, token: str) -> tuple[str,
         supplier.place.parent_name, supplier.place.name, supplier.floor,
         supplier.location_description, supplier.pickup_instructions,
     ) if part and part.strip())
-    return supplier.name, location
+    return SupplierSnapshot(supplier.name, location, supplier.closes_at)
 
 
 class _Reservation(BaseModel):

@@ -6,7 +6,7 @@ order_log in the same transaction. Credit work is queued for a separate worker.
 Paginated reads return items, page, page_size, total and total_pages.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 from typing import Literal
 from uuid import UUID, uuid4
@@ -15,6 +15,16 @@ from sqlalchemy import func, insert, or_, select, text, update
 from sqlalchemy.engine import Connection
 
 from .schema import ORDER_STATUSES, credit_jobs, order_log, orders
+
+# The longest the Create Request form offers. Requests wait at most this long
+# for a courier, so an unaccepted request never holds a credit for long.
+MAX_ACCEPTANCE_WINDOW = timedelta(minutes=60)
+# The browser computes the deadline from its own clock, which may run a little
+# ahead of the database's.
+CLOCK_SKEW_ALLOWANCE = timedelta(minutes=5)
+# Time a courier who accepts at the deadline needs to reach the store and buy
+# the items before it closes.
+CLOSING_BUFFER = timedelta(minutes=10)
 
 
 class OrderIdempotencyConflict(ValueError):
@@ -68,8 +78,14 @@ def create_order(
     expires_at: datetime,
     idempotency_key: str,
     delivery_instructions: str | None = None,
+    supplier_closes_at: datetime | None = None,
 ) -> dict[str, object]:
     """Create RESERVING order and RESERVE job, or return an identical retry.
+
+    The acceptance deadline may be at most MAX_ACCEPTANCE_WINDOW away and, when
+    the supplier closes, at least CLOSING_BUFFER before it, so a courier who
+    accepts at the last moment can still reach the store. Accepting needs no
+    supplier check: every deadline already ends before closing.
 
     Supplier name/location come from Supplier Service. Generate the order ID
     here; publish OPEN only after reservation succeeds. The caller owns the
@@ -96,6 +112,9 @@ def create_order(
         raise ValueError("credit_amount must be a positive 32-bit integer")
     if not isinstance(expires_at, datetime) or expires_at.utcoffset() is None:
         raise ValueError("expires_at must be a timezone-aware datetime")
+    if supplier_closes_at is not None and (
+            not isinstance(supplier_closes_at, datetime) or supplier_closes_at.utcoffset() is None):
+        raise ValueError("supplier_closes_at must be a timezone-aware datetime")
     if delivery_instructions is not None and not isinstance(delivery_instructions, str):
         raise ValueError("delivery_instructions must be text or None")
     values.update(
@@ -131,6 +150,14 @@ def create_order(
         now = connection.execute(select(func.clock_timestamp())).scalar_one()
         if expires_at <= now:
             raise ValueError("expires_at must be in the future")
+        if expires_at > now + MAX_ACCEPTANCE_WINDOW + CLOCK_SKEW_ALLOWANCE:
+            raise ValueError("The acceptance deadline can be at most 60 minutes away.")
+        if supplier_closes_at is not None and expires_at > supplier_closes_at - CLOSING_BUFFER:
+            latest = supplier_closes_at - CLOSING_BUFFER
+            raise ValueError(
+                f"This store closes at {supplier_closes_at:%H:%M}. Choose an acceptance "
+                f"deadline by {latest:%H:%M} so a courier can get there in time."
+            )
         order_id = str(uuid4())
         created = connection.execute(
             insert(orders).values(

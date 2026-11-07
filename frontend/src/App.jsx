@@ -3,6 +3,7 @@ import Navbar from "./components/Navbar";
 import SuppliersSection, { SupplierImage } from "./components/SuppliersSection";
 import OrderCard from "./components/OrderCard";
 import OrderActionButton from "./components/OrderActionButton";
+import { deadlineMinutes } from "./utils/deadlines";
 import CreateOrderModal from "./components/CreateOrderModal";
 import RequesterOrdersSection from "./components/RequesterOrdersSection";
 import CourierOrdersSection from "./components/CourierOrdersSection";
@@ -760,7 +761,7 @@ export default function App() {
   const handleCreateOrder = async (newOrderData) => {
     const fingerprint = JSON.stringify(newOrderData);
     if (creatingOrder.current?.fingerprint !== fingerprint) {
-      const minutes = { "Within 30 mins": 30, "Within 45 mins": 45, "Within 1 hour": 60 }[newOrderData.deadline] || 45;
+      const minutes = deadlineMinutes(newOrderData.deadline);
       creatingOrder.current = { fingerprint, key: crypto.randomUUID(), body: {
         supplier_id: newOrderData.supplierId, item_description: newOrderData.items,
         delivery_location: newOrderData.deliveryLocation,

@@ -6,7 +6,7 @@ shift belongs to the day it started: Supersnacks open 18:00 to 02:00 on Friday
 is still open at 01:00 on Saturday even if it does not trade on Saturday.
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 DAYS = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 
@@ -78,3 +78,34 @@ def is_open(opening: time, closing: time, days: list[str], now: datetime | None 
     # Past midnight: the evening part of today's shift, or the early-morning
     # tail of yesterday's.
     return (today in days and current >= opening) or (yesterday in days and current < closing)
+
+
+def _at(day: date, moment: time) -> datetime:
+    return datetime.combine(day, moment, tzinfo=CAMPUS_TIMEZONE)
+
+
+def closes_at(opening: time, closing: time, days: list[str],
+              now: datetime | None = None) -> datetime | None:
+    """When the shift trading at `now` ends, in campus time.
+
+    None when the supplier is closed now, or when it never closes (open all
+    day, every day). Order Service uses this so a request's acceptance deadline
+    leaves a courier time to reach the store before it shuts.
+    """
+    now = (now or datetime.now(CAMPUS_TIMEZONE)).astimezone(CAMPUS_TIMEZONE)
+    if not is_open(opening, closing, days, now):
+        return None
+    today = now.date()
+
+    if (opening, closing) == OPEN_ALL_DAY:
+        # Open until midnight before the first day it does not trade.
+        for ahead in range(1, 7):
+            if DAYS[(now.weekday() + ahead) % 7] not in days:
+                return _at(today + timedelta(days=ahead), time(0, 0))
+        return None
+    if opening < closing:
+        return _at(today, closing)
+    # Past midnight: tonight's shift ends tomorrow; the early-morning tail of
+    # yesterday's shift ends today.
+    current = now.time().replace(tzinfo=None)
+    return _at(today + timedelta(days=1), closing) if current >= opening else _at(today, closing)

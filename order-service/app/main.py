@@ -23,7 +23,7 @@ from .api_schemas import (
 )
 from .database import create_database_engine
 from .schema import metadata, orders
-from .service_clients import supplier_snapshot
+from .service_clients import SupplierSnapshot, supplier_snapshot
 
 from . import order_queries as queries
 
@@ -95,14 +95,16 @@ def create_app() -> FastAPI:
                 orders.c.requester_user_id == caller.id,
                 orders.c.idempotency_key == idempotency_key,
             )).mappings().one_or_none()
-        snapshot = (existing["supplier_name"], existing["pickup_location"]) if existing else supplier_snapshot(
-            os.getenv("SUPPLIER_SERVICE_URL", "http://localhost:8001"),
-            body.supplier_id, request.headers["authorization"],
-        )
+        snapshot = SupplierSnapshot(existing["supplier_name"], existing["pickup_location"], None) \
+            if existing else supplier_snapshot(
+                os.getenv("SUPPLIER_SERVICE_URL", "http://localhost:8001"),
+                body.supplier_id, request.headers["authorization"],
+            )
         with request.app.state.database.begin() as connection:
             return OrderResponse.model_validate(queries.create_order(
                 connection, requester_user_id=caller.id,
-                supplier_name=snapshot[0], pickup_location=snapshot[1],
+                supplier_name=snapshot.name, pickup_location=snapshot.pickup_location,
+                supplier_closes_at=snapshot.closes_at,
                 idempotency_key=idempotency_key, **body.model_dump(),
             ))
 

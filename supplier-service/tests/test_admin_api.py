@@ -250,6 +250,9 @@ class AdminEndpointTests(unittest.TestCase):
             body = self.call("post", "/api/v1/suppliers", self.body).json()
         self.assertEqual(body["operating_days"], ["MON", "TUE", "WED", "THU", "FRI"])
         self.assertIsInstance(body["is_open_now"], bool)
+        # Present either way: a timestamp while open, null while closed.
+        self.assertIn("closes_at", body)
+        self.assertEqual(body["closes_at"] is not None, body["is_open_now"])
 
     def test_removing_a_photo_is_an_audited_change_with_a_reason(self):
         path = f"/api/v1/suppliers/{self.supplier_id}"

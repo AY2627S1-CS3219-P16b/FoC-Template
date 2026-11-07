@@ -244,7 +244,10 @@ Order Service can refuse an order placed while a supplier is shut.
   `{MON,TUE,WED,THU,FRI}`.
 
 "Is it open now?" is answered by `is_open()` in `app/hours.py`, in Singapore
-time, and returned on every supplier as `is_open_now`. Order Service should use
+time, and returned on every supplier as `is_open_now`. Every supplier also
+carries `closes_at`: when the current shift ends, as a `+08:00` timestamp, or
+`null` when it is closed now or never closes (open 24 hours every day). Order
+Service uses it to keep a request's acceptance deadline before closing time. Order Service should use
 that field rather than repeat the rule. It is not a plain range comparison:
 
 - When `closing_time < opening_time` the window wraps past midnight.

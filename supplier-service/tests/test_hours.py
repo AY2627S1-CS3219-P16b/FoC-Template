@@ -7,7 +7,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.database import create_database_engine
-from app.hours import CAMPUS_TIMEZONE, DAYS, check_hours, is_open, normalize_days, parse_days
+from app.hours import CAMPUS_TIMEZONE, DAYS, check_hours, closes_at, is_open, normalize_days, parse_days
 from app.schema import create_schema, metadata, suppliers
 
 WEEKDAYS = ["MON", "TUE", "WED", "THU", "FRI"]
@@ -74,6 +74,36 @@ class IsOpenTests(unittest.TestCase):
                 check_hours(same, same)
         check_hours(time(0, 0), time(23, 59))
         check_hours(time(18, 0), time(2, 0))
+
+
+class ClosesAtTests(unittest.TestCase):
+    def test_daytime_shift_ends_at_closing_today(self):
+        hours = (time(8, 0), time(18, 0), WEEKDAYS)
+        self.assertEqual(closes_at(*hours, at("WED", 12)), at("WED", 18))
+        self.assertIsNone(closes_at(*hours, at("WED", 18)))   # closed: nothing to end
+        self.assertIsNone(closes_at(*hours, at("SAT", 12)))
+
+    def test_past_midnight_shift_ends_the_next_morning(self):
+        hours = (time(18, 0), time(2, 0), WEEKDAYS)
+        self.assertEqual(closes_at(*hours, at("FRI", 23)), at("SAT", 2))
+        # The early-morning tail of Friday night's shift.
+        self.assertEqual(closes_at(*hours, at("SAT", 1, 30)), at("SAT", 2))
+        self.assertIsNone(closes_at(*hours, at("SAT", 12)))
+
+    def test_open_all_day_ends_before_the_first_day_off(self):
+        self.assertEqual(closes_at(time(0, 0), time(23, 59), WEEKDAYS, at("WED", 10)),
+                         at("SAT", 0))
+        self.assertEqual(closes_at(time(0, 0), time(23, 59), WEEKDAYS, at("FRI", 23, 59)),
+                         at("SAT", 0))
+
+    def test_open_all_day_every_day_never_closes(self):
+        self.assertIsNone(closes_at(time(0, 0), time(23, 59), list(DAYS), at("SUN", 23)))
+
+    def test_result_is_in_campus_time(self):
+        utc = datetime(2026, 10, 12, 1, 0, tzinfo=timezone.utc)   # Monday 09:00 on campus
+        result = closes_at(time(8, 0), time(18, 0), WEEKDAYS, utc)
+        self.assertEqual(result, at("MON", 18))
+        self.assertEqual(result.utcoffset(), CAMPUS_TIMEZONE.utcoffset(None))
 
 
 @unittest.skipUnless(os.getenv("RUN_POSTGRES_TESTS") == "1", "Set RUN_POSTGRES_TESTS=1 for PostgreSQL checks")
