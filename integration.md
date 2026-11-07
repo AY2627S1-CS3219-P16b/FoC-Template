@@ -49,7 +49,8 @@ release without becoming available for acceptance.
 ## Delivery, cancellation and expiry
 
 The courier accepts, picks up and marks delivery through Order Service. The
-requester confirms receipt. Order Service then queues a `TRANSFER` using the
+requester confirms receipt, or the worker auto-confirms after the configured
+window (24 hours by default). Order Service then queues a `TRANSFER` using the
 persisted requester, assigned courier and reward; the frontend supplies no
 recipient or transfer amount. After acknowledgement, the order is `COMPLETED`.
 
@@ -99,3 +100,18 @@ HTML comments and the authoring README are excluded from indexing. Startup
 indexes changed documents; later changes can be indexed explicitly without a
 restart. Missing/stale indexes and provider failures produce a temporary-support
 message without blocking the core application. See [FAQ setup](faq-service/README.md).
+
+Couriers may hold only one ACCEPTED/PICKED_UP order, enforced by a partial
+unique index. An assigned courier can return an ACCEPTED errand to OPEN without
+changing its original acceptance deadline or reserved credit.
+
+Order participants may read each other's display name and preferred contact via
+GET /orders/{id}/contact only during ACCEPTED/PICKED_UP/DELIVERED. Order Service
+uses the separate ORDER_CONTACT_SERVICE_KEY for User Service's internal lookup;
+it cannot use this key to change credit balances.
+
+After CREDIT_JOB_MAX_ATTEMPTS failures (default 10), the credit job stops with
+failed_at and the order exposes credit_error. Admins resolve the cause and retry
+from the dashboard; replay keeps the original idempotency key and reconciles
+Credit Service first. Apply order-service/migrations/001_review_fixes.sql before
+upgrading an existing Order database.

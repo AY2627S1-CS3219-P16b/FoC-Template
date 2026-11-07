@@ -16,6 +16,9 @@ JWT. `/health` is public and checks PostgreSQL connectivity.
 | GET | `/api/v1/orders/me?role=requester` | My requests; `role=courier` lists my assignments |
 | GET | `/api/v1/orders/{order_id}` | Current order details |
 | POST | `/api/v1/orders/{order_id}/accept` | Assign the calling courier |
+| POST | `/api/v1/orders/{order_id}/unassign` | Assigned courier returns an ACCEPTED errand to OPEN |
+| GET | `/api/v1/orders/{order_id}/contact` | Active participants read the other party's name and preferred contact |
+| POST | `/api/v1/orders/{order_id}/retry-credit` | Admin requeues a failed credit job after resolving its cause |
 | POST | `/api/v1/orders/{order_id}/pickup` | Assigned courier marks collection |
 | POST | `/api/v1/orders/{order_id}/deliver` | Assigned courier marks delivery |
 | POST | `/api/v1/orders/{order_id}/confirm` | Requester confirms receipt; queue payment |
@@ -84,8 +87,13 @@ requester, amount and recipient, and uses a stable key per order/operation.
 Timeouts and crashes after a remote commit are reconciled on the next attempt.
 Only acknowledged credit movements finalize order states. Missing credit
 accounts are retried while registration allocation catches up. Only a definitive
-insufficient-funds response rejects a reservation; configuration and incompatible
-reservation errors stay queued for operator attention.
+insufficient-funds response rejects a reservation. Other failures retry up to
+`CREDIT_JOB_MAX_ATTEMPTS` (default 10), including 4xx responses because account
+allocation and configuration can recover. Exhausted jobs set `failed_at` and
+`orders.credit_error`, write a FAILED history entry, and stop retrying. The order
+keeps its pending state so an admin can correct the cause and use Retry credit
+job in the dashboard. Retry resets attempts but preserves the job and remote
+idempotency key, reconciling any previous remote commit before sending again.
 
 Retries use exponential backoff capped at 256 seconds. Inspect `credit_jobs`
 (`attempts`, `last_error_code`, `next_attempt_at`, `completed_at`) and worker logs
@@ -116,6 +124,10 @@ JWT_PUBLIC_KEY_PATH=../user-service/keys/jwt-public.pem
 SUPPLIER_SERVICE_URL=http://localhost:8001
 CREDIT_SERVICE_URL=http://localhost:8002
 ORDER_SERVICE_KEY=<same secret configured in Credit Service>
+USER_SERVICE_URL=http://localhost:8000
+ORDER_CONTACT_SERVICE_KEY=<same separate secret configured in User Service>
+AUTO_CONFIRM_RECEIPT_HOURS=24
+CREDIT_JOB_MAX_ATTEMPTS=10
 ```
 
 From `order-service/`, run the API and worker in separate terminals:
@@ -132,8 +144,43 @@ credentials in Compose are for local development. No initial order data is neede
 ## Verification limits
 
 The repository does not contain the full assignment rubric. This implementation
-follows the lifecycle and Credit/Supplier contracts in this repository. Runtime
-verification and container builds were not performed during this review, as
-requested. The frontend calls Order Service for lifecycle actions and polls
+follows the lifecycle and Credit/Supplier contracts in this repository. Container builds are not part of the Python and frontend regression checks. The frontend calls Order Service for lifecycle actions and polls
 orders and credits immediately after actions, every second while credit actions
 are pending, and every five seconds otherwise. It does not hold service credentials.
+
+## Review fixes and existing databases
+
+Before starting the updated API/worker against an existing database, apply
+`migrations/001_review_fixes.sql` with psql (`ON_ERROR_STOP=1`). Back up first.
+From the repository root, with the old API and worker stopped:
+
+```sh
+docker compose exec -T order-db psql -U order_service -d order_db -v ON_ERROR_STOP=1 < order-service/migrations/001_review_fixes.sql
+```
+
+The unique index intentionally fails if a courier already has multiple ACCEPTED
+or PICKED_UP orders; resolve those assignments before rerunning. New databases
+receive the columns and index through create_all. Do not reset persisted data.
+
+Only ACCEPTED and PICKED_UP count toward the one-errand limit; marking delivery
+frees the courier to accept another. Before pickup, Give Back Errand clears the
+courier and reopens the order without changing its deadline or reserved credit.
+Already overdue orders are picked up by normal expiry. Accepting and holding an
+errand past the deadline is still possible, and drops are logged with the courier
+ID. Disputes/admin cancellation after pickup remain future work for N1.
+
+The worker auto-confirms DELIVERED orders after `AUTO_CONFIRM_RECEIPT_HOURS`
+(default 24). It uses updated_at as delivery time, locks with SKIP LOCKED, queues
+one TRANSFER, and logs AUTO_CONFIRM_RECEIPT with no actor. Configure the same
+window in API and worker; the API supplies the UI confirmation deadline.
+
+Configure USER_SERVICE_URL and a distinct ORDER_CONTACT_SERVICE_KEY in the API
+and User Service (Compose does this). Only the requester/assigned courier may
+read contact during ACCEPTED, PICKED_UP, or DELIVERED. User Service's internal
+lookup returns the name and only the selected contact, including email when
+preferred; no preference returns a name with no contact. The API holds the order
+lock during lookup so unassignment/completion cannot race access checks.
+
+Regression tests: `python -m pytest tests`. To include real PostgreSQL lifecycle
+and concurrency tests, set ORDER_TEST_DATABASE_URL to a disposable PostgreSQL
+database. Each test uses an isolated schema and removes it afterwards.

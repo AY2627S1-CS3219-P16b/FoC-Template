@@ -29,7 +29,7 @@ export function RequesterOrdersView({ orders = [], onCancelOrder, onConfirmDeliv
       {hasResult && <>
       <p className="results-summary" role="status">{total} {view} {total === 1 ? "request" : "requests"}</p>
       {orders.length ? <div className="orders-grid">{orders.map((order) => {
-        const notice = ["RESERVING", "CANCELLING", "EXPIRING", "COMPLETING"].includes(order.status)
+        const notice = !order.creditError && ["RESERVING", "CANCELLING", "EXPIRING", "COMPLETING"].includes(order.status)
           ? <div className="notice-box order-notice">Credit processing is pending. Your request will update automatically.</div>
           : order.status === "REJECTED" ? <div className="action-error order-notice">Credits could not be reserved. Check your balance before creating another request.</div> : null;
         return <OrderCard key={order.id} order={order} notice={notice} helpRole="requester">

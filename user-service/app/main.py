@@ -1,4 +1,5 @@
 import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -292,6 +293,21 @@ def create_app(
         if actor["auth_role"] != "ADMIN":
             raise HTTPException(status_code=403, detail="Admin access is required.")
         return database.list_user_profiles()
+
+    @app.get("/api/v1/internal/users/{user_id}/contact")
+    def get_order_contact(user_id: str, request: Request):
+        expected = os.getenv("ORDER_CONTACT_SERVICE_KEY", "")
+        supplied = request.headers.get("X-Service-Key", "")
+        if not expected or not secrets.compare_digest(supplied.encode(), expected.encode()):
+            raise HTTPException(status_code=403, detail="Invalid service key.")
+        target = database.find_user_profile(user_id)
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found.")
+        preference = target["contact_preference"]
+        field = {"TELEGRAM": "telegram_handle", "PHONE": "phone_number", "EMAIL": "email"}.get(preference)
+        return {"display_name": target["display_name"],
+                "contact_preference": preference if field else None,
+                "contact": target[field] if field else None}
 
     @app.get("/api/v1/users/{user_id}", response_model=UserResponse)
     def get_user_profile(user_id: str, request: Request):

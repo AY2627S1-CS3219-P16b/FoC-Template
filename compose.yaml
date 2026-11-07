@@ -97,6 +97,7 @@ services:
       JWT_PRIVATE_KEY_PATH: /run/keys/jwt-private.pem
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      ORDER_CONTACT_SERVICE_KEY: ${ORDER_CONTACT_SERVICE_KEY:?Set ORDER_CONTACT_SERVICE_KEY in .env}
     volumes:
       - type: bind
         source: ./user-service/keys/jwt-private.pem
@@ -187,6 +188,9 @@ services:
       DATABASE_URL: postgresql+psycopg://order_service:${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}@order-db:5432/order_db
       JWT_PUBLIC_KEY_PATH: /run/keys/jwt-public.pem
       SUPPLIER_SERVICE_URL: http://supplier-service:8001
+      USER_SERVICE_URL: http://user-service:8000
+      AUTO_CONFIRM_RECEIPT_HOURS: ${AUTO_CONFIRM_RECEIPT_HOURS:-24}
+      ORDER_CONTACT_SERVICE_KEY: ${ORDER_CONTACT_SERVICE_KEY:?Set ORDER_CONTACT_SERVICE_KEY in .env}
     # Credit calls and ORDER_SERVICE_KEY belong to order-worker only.
     volumes:
       - type: bind
@@ -218,6 +222,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://order_service:${ORDER_DB_PASSWORD:?Set ORDER_DB_PASSWORD in .env}@order-db:5432/order_db
       CREDIT_SERVICE_URL: http://credit-service:8002
+      AUTO_CONFIRM_RECEIPT_HOURS: ${AUTO_CONFIRM_RECEIPT_HOURS:-24}
+      CREDIT_JOB_MAX_ATTEMPTS: ${CREDIT_JOB_MAX_ATTEMPTS:-10}
       ORDER_SERVICE_KEY: ${ORDER_SERVICE_KEY:?Set ORDER_SERVICE_KEY in .env}
     depends_on:
       order-service:

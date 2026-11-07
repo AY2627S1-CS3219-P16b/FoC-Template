@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError, SQLAlchemyError
 
 from .auth import CurrentUser, current_user, load_jwt_public_key, require_admin
 from .api_schemas import (
+    ContactResponse,
     CreateOrderRequest,
     HealthResponse,
     OrderHistoryPageResponse,
@@ -23,7 +24,7 @@ from .api_schemas import (
 )
 from .database import create_database_engine
 from .schema import metadata, orders
-from .service_clients import supplier_snapshot
+from .service_clients import supplier_snapshot, user_contact
 
 from . import order_queries as queries
 
@@ -62,6 +63,10 @@ def create_app() -> FastAPI:
     }
 
     async def query_error(request: Request, error: Exception) -> JSONResponse:
+        if (isinstance(error, IntegrityError) and
+                getattr(getattr(error.orig, "diag", None), "constraint_name", None) == "uq_orders_active_courier"):
+            return JSONResponse(status_code=409, content={
+                "detail": "Finish your current errand before accepting another one."})
         code, message = next((config for cls, config in errors.items()
                               if isinstance(error, cls)), (500, "Internal server error."))
         return JSONResponse(status_code=code, content={"detail": message or str(error)})
@@ -181,6 +186,27 @@ def create_app() -> FastAPI:
             return OrderResponse.model_validate(queries.assign_courier(
                 connection, order_id, courier_user_id=caller.id,
             ))
+
+    @app.post("/api/v1/orders/{order_id}/unassign", response_model=OrderResponse)
+    def unassign_courier(order_id: RequiredText, request: Request,
+                         caller: CurrentUser = Depends(current_user)):
+        with request.app.state.database.begin() as connection:
+            return queries.unassign_courier(connection, order_id, courier_user_id=caller.id)
+
+    @app.get("/api/v1/orders/{order_id}/contact", response_model=ContactResponse)
+    def get_contact(order_id: RequiredText, request: Request,
+                    caller: CurrentUser = Depends(current_user)):
+        # Keep the row locked through lookup so unassignment cannot race disclosure.
+        with request.app.state.database.begin() as connection:
+            other_id = queries.get_contact_user_id(connection, order_id, viewer_user_id=caller.id)
+            return user_contact(os.getenv("USER_SERVICE_URL", "http://localhost:8000"),
+                                other_id, os.environ["ORDER_CONTACT_SERVICE_KEY"])
+
+    @app.post("/api/v1/orders/{order_id}/retry-credit", response_model=OrderResponse)
+    def retry_credit(order_id: RequiredText, request: Request,
+                     caller: CurrentUser = Depends(require_admin)):
+        with request.app.state.database.begin() as connection:
+            return queries.retry_failed_credit(connection, order_id, actor_user_id=caller.id)
 
     @app.post("/api/v1/orders/{order_id}/pickup", response_model=OrderResponse)
     def mark_items_collected(

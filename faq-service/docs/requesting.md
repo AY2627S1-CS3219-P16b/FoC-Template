@@ -48,12 +48,13 @@ it or the deadline passes.
 ## What do the request statuses mean?
 
 - **Pending (credit processing)**: the reward credit is being reserved, returned
-  or paid. The request updates automatically.
+  or paid. The request updates automatically. A needs-admin-attention warning
+  means credit processing has stopped until an admin resolves it.
 - **Open**: waiting for a courier to accept it.
 - **Accepted**: a courier has taken your errand.
 - **Picked up**: the courier has collected your items.
 - **Delivered**: the courier says the items were delivered. Please confirm receipt.
-- **Completed**: you confirmed receipt and the courier has been paid.
+- **Completed**: receipt was confirmed and the courier has been paid.
 - **Cancelled**: you cancelled the request; your credit was returned.
 - **Expired**: nobody accepted it before the deadline; your credit was returned.
 - **Rejected**: you did not have enough credits to reserve the reward.
@@ -83,19 +84,25 @@ request at any time.
 ## How do I confirm I received my items?
 
 When the courier marks your errand as delivered, a "Confirm Delivery" button
-appears on the request under "My Requests". Clicking it completes the errand and
-pays the courier the reward credit.
+appears on the request under "My Requests". Clicking it queues the courier's
+reward transfer; the errand completes when that transfer succeeds.
+
+Delivered requests show the automatic confirmation deadline in My Requests.
+Receipt is confirmed automatically after the configured window (24 hours after
+delivery by default), and the courier's reward transfer is queued. Confirm
+receipt yourself once you have the items.
+
 
 ## It says delivered, but I didn't receive my items. What should I do?
 
 Do not click "Confirm Delivery" until you have your items, because confirming
 completes the errand and pays the courier the reward credit. First check your
 delivery location and any delivery instructions you gave, in case the courier
-left the items there. FoC does not currently have a dispute process, so the
-request stays "Delivered" until you confirm it.
+left the items there. Contact your courier using the preferred contact in My Requests. FoC does not
+currently have a dispute process. Receipt is automatically confirmed at the
+deadline shown, even if you do not confirm it yourself.
 
-<!-- REVIEW: No dispute flow, delivery confirmation timeout or admin contact
-channel exists. Update when any of them is added. -->
+<!-- REVIEW: Dispute handling remains future work. -->
 
 ## Can I accept my own request?
 
@@ -109,13 +116,10 @@ requests that you create on purpose are treated as different requests.
 
 ## Can I see who is delivering my request?
 
-After a courier accepts your request, the "Courier" field under "My Requests"
-changes from "Unassigned" to "Assigned courier". FoC does not currently show the
-courier's name or contact details.
-
-<!-- REVIEW: The frontend shows "Assigned courier" only (api/orders.js:63).
-Update when courier names or contact details are shown, and when
-requester–courier chat (N2H2) and translation (N2H3) are built. -->
+After acceptance, My Requests shows your courier's display name and only their
+preferred contact (Telegram, phone or email, if provided). Contact stays visible
+through Delivered and is hidden once completion processing starts or the errand
+ends.
 
 ## Where is my courier?
 
@@ -131,11 +135,7 @@ If your courier is taking a long time and your items still haven't arrived,
 check the status under "My Requests", which updates automatically when the
 courier picks up and delivers your items. Once a courier accepts your request,
 FoC does not set a delivery deadline, and the request can no longer be
-cancelled. FoC does not currently show the courier's contact details, so you
-cannot message them directly.
-
-<!-- REVIEW: Update when the requester and courier can see each other's
-contact details after acceptance, or an admin contact channel exists. -->
+cancelled. Use the courier's preferred contact shown under My Requests to reach them.
 
 ## Can I reorder or schedule an errand for later?
 

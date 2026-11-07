@@ -42,6 +42,10 @@ export default function OrderCard({ order, children, notice, helpRole }) {
         {order.status === "OPEN" ? <span className={urgent ? "deadline-urgent" : ""}><Icon name="clock" />{deadline}</span>
           : <span>{order.createdAtIso ? formatOrderDate(order.createdAtIso) : order.createdAt}</span>}
       </div>
+      {order.receiptConfirmationDeadline && <div className="notice-box order-notice">Receipt is confirmed automatically by {formatOrderDate(order.receiptConfirmationDeadline, { detailed: true })}. Confirm once you have your items.</div>}
+      {order.contact && <div className="notice-box order-notice">{order.contact.display_name} · {order.contact.contact_preference || "Contact"}: {order.contact.contact || "No preferred contact provided"}</div>}
+      {order.contactError && <p role="status">Contact details are unavailable. Retrying automatically.</p>}
+      {order.creditError && <div className="action-error" role="alert">Credit processing needs admin attention.</div>}
       {notice}
       <div className="order-card-footer">
         <details className="order-details"><summary>View details</summary><OrderFacts order={order} /></details>

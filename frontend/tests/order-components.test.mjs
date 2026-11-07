@@ -151,3 +151,14 @@ test("request views show the selected filter, server totals and bounded paginati
   assert.match(failed, /role="alert"[^>]*>Could not load your requests/);
   assert.doesNotMatch(failed, /No past requests|24 past requests/);
 });
+
+test("couriers can give back only an accepted errand and see contact and credit failures", () => {
+  for (const status of ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETING"]) {
+    const html = render("CourierActiveSection", { activeTask: { ...order, status }, onUnassign: noop });
+    assert.equal(html.includes("Give Back Errand"), status === "ACCEPTED");
+  }
+  const html = render("OrderCard", { order: { ...order, contact: { display_name: "Alice", contact_preference: "TELEGRAM", contact: "@alice" }, creditError: "HTTP_409" } });
+  assert.match(html, /Alice/);
+  assert.match(html, /@alice/);
+  assert.match(html, /Credit processing needs admin attention/);
+});

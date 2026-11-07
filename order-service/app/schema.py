@@ -56,6 +56,7 @@ orders = Table(
         "updated_at", DateTime(timezone=True), nullable=False,
         server_default=func.now(), onupdate=func.now(),
     ),
+    Column("credit_error", String(100), nullable=True),
     Column("idempotency_key", String(200), nullable=False),
     UniqueConstraint(
         "requester_user_id", "idempotency_key", name="uq_orders_requester_idempotency_key",
@@ -126,6 +127,7 @@ credit_jobs = Table(
     Column("attempts", Integer, nullable=False, server_default="0"),
     Column("next_attempt_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     Column("completed_at", DateTime(timezone=True), nullable=True),
+    Column("failed_at", DateTime(timezone=True), nullable=True),
     Column("last_error_code", String(100), nullable=True),
     Column("created_at", DateTime(timezone=True), nullable=False, server_default=func.now()),
     UniqueConstraint("order_id", "operation", name="uq_credit_jobs_order_operation"),
@@ -150,3 +152,9 @@ Index(
     "ix_credit_jobs_pending", credit_jobs.c.next_attempt_at, credit_jobs.c.created_at,
     postgresql_where=credit_jobs.c.completed_at.is_(None),
 )
+
+# Database enforcement also covers simultaneous accepts on different orders.
+Index(
+    "uq_orders_active_courier", orders.c.courier_user_id, unique=True,
+    postgresql_where=orders.c.status.in_(("ACCEPTED", "PICKED_UP")),
+).ddl_if(dialect="postgresql")

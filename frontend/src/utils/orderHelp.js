@@ -44,7 +44,7 @@ const REQUESTER_HELP = {
 const COURIER_HELP = {
   ACCEPTED: ["Collect the items from the supplier, then mark them picked up.", [Q.steps, Q.payItems, Q.courierCancel]],
   PICKED_UP: ["Deliver the items to the requester, then mark them delivered.", [Q.steps, Q.requesterContact]],
-  DELIVERED: ["Waiting for the requester to confirm receipt. You're paid after they confirm.", [Q.getPaid, Q.earn]],
+  DELIVERED: ["Waiting for receipt confirmation. Automatic confirmation applies at the displayed deadline.", [Q.getPaid, Q.earn]],
   COMPLETING: ["The requester confirmed receipt. Your reward is being processed.", [Q.getPaid]],
   COMPLETED: ["Errand complete. Your reward has been paid.", [Q.getPaid, Q.balance]],
 };

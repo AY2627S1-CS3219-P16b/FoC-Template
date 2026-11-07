@@ -679,8 +679,8 @@ export default function App() {
     return () => { ignore = true; };
   }, [accessToken, screen, requestedSupplierId]);
 
-  // Active courier task for the current user
-  const activeCourierTask = orders.find(
+  // Active courier assignments for the current user
+  const activeCourierTasks = orders.filter(
     (o) =>
       o.courierId === user.id &&
       ["ACCEPTED", "PICKED_UP", "DELIVERED", "COMPLETING"].includes(o.status),
@@ -932,18 +932,20 @@ export default function App() {
             pendingOrderActions={pendingOrderActions}
             currentUserId={user.id}
             onAcceptOrder={handleAcceptOrder}
-            hasActiveTask={!!activeCourierTask}
+            hasActiveTask={activeCourierTasks.some((order) => ["ACCEPTED", "PICKED_UP"].includes(order.status))}
           />
         )}
 
         {role === "COURIER" && activeTab === "courier-active" && (
-          <CourierActiveSection
-            activeTask={activeCourierTask}
-            pendingAction={pendingOrderActions[activeCourierTask?.id]}
+          <>{(activeCourierTasks.length ? activeCourierTasks : [null]).map((task) => <CourierActiveSection
+            key={task?.id || "empty"}
+            activeTask={task}
+            pendingAction={pendingOrderActions[task?.id]}
             onMarkPickedUp={handleMarkPickedUp}
             onMarkDelivered={handleMarkDelivered}
+            onUnassign={(id) => performOrderAction(id, "unassign")}
             onFindNewTask={() => setActiveTab("courier-browse")}
-          />
+          />)}</>
         )}
 
         {/* COMMON APP SECTIONS */}

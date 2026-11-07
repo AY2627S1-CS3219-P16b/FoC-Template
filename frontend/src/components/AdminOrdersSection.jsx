@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { listAdminOrders, orderForDisplay } from "../api/orders";
+import { changeOrder, listAdminOrders, orderForDisplay } from "../api/orders";
 import { OrderFacts, OrderStatus } from "./OrderCard";
 import Icon from "./Icon";
 import { creditLabel, formatOrderDate, shortOrderId, statusLabel } from "../utils/orderPresentation";
@@ -82,7 +82,12 @@ export default function AdminOrdersSection({ token, accounts }) {
                   <tr className={expanded ? "is-expanded" : ""}>
                     <td data-label="Order" className="admin-order-main"><span className="order-reference">#{shortOrderId(order.id)}</span><strong>{order.supplier_name}</strong><span className="table-order-items">{order.item_description}</span></td>
                     <td data-label="Requester"><span className="table-person">{person(order.requester_user_id)}</span></td>
-                    <td data-label="Status"><OrderStatus status={order.status} /></td>
+                    <td data-label="Status"><OrderStatus status={order.status} />{order.credit_error && <div className="action-error">Needs attention: {order.credit_error}<button type="button" className="btn btn-secondary btn-sm" disabled={loading} onClick={async () => {
+                      setLoading(true);
+                      try { await changeOrder(token, order.id, "retry-credit"); setRefresh((value) => value + 1); }
+                      catch (error) { setError(error.message); }
+                      finally { setLoading(false); }
+                    }}>Retry credit job</button></div>}</td>
                     <td data-label="Reward" className="table-reward">{creditLabel(order.credit_amount)}</td>
                     <td data-label="Created"><time dateTime={order.created_at}>{formatOrderDate(order.created_at)}</time></td>
                     <td className="table-order-action"><button type="button" className="btn btn-secondary btn-sm" aria-expanded={expanded} aria-controls={detailId} aria-label={(expanded ? "Hide" : "View") + " details for order " + shortOrderId(order.id)} onClick={() => setExpandedId(expanded ? null : order.id)}>{expanded ? "Hide details" : "View details"}</button></td>

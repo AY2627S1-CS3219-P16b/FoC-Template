@@ -11,7 +11,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, StrictBool
 
-from .api_schemas import RequiredText
+from .api_schemas import ContactResponse, RequiredText
 
 
 def _request_json(url: str, headers: dict, payload: dict | None = None):
@@ -144,3 +144,16 @@ class CreditClient:
         self._validate(result, job)
         if result.status != target:
             raise RuntimeError("Credit Service did not confirm the requested operation")
+
+
+def user_contact(base_url: str, user_id: str, service_key: str) -> ContactResponse:
+    try:
+        return ContactResponse.model_validate(_request_json(
+            f"{base_url.rstrip('/')}/api/v1/internal/users/{quote(user_id, safe='')}/contact",
+            {"X-Service-Key": service_key}))
+    except HTTPError:
+        raise HTTPException(502, "Contact lookup was rejected.") from None
+    except (URLError, TimeoutError, OSError, HTTPProtocolError):
+        raise HTTPException(503, "User Service is unavailable.") from None
+    except (ValueError, UnicodeError):
+        raise HTTPException(502, "User Service returned invalid contact details.") from None
