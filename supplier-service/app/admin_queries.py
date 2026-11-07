@@ -11,6 +11,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
+from .hours import check_hours
 from .places import normalize_place_name
 from .schema import places, suppliers, supplier_audit_logs
 from .supplier_queries import get_supplier
@@ -26,6 +27,10 @@ class DuplicatePlaceError(Exception):
 
 class UnknownPlaceError(Exception):
     """The referenced place does not exist."""
+
+
+class InvalidHoursError(ValueError):
+    """The opening and closing times, once applied, would never be open."""
 
 
 class NoChangeError(Exception):
@@ -97,6 +102,14 @@ def update_supplier(connection, *, actor_id: UUID, supplier_id: UUID,
         return None
     if "place_id" in changes:
         _require_place(connection, changes["place_id"])
+    # The schema checks the pair only when both are sent; changing one time
+    # must still leave a range that can be open. The row is locked, so a
+    # concurrent edit of the other time cannot slip in between.
+    try:
+        check_hours(changes.get("opening_time", current["opening_time"]),
+                    changes.get("closing_time", current["closing_time"]))
+    except ValueError as error:
+        raise InvalidHoursError(str(error)) from error
 
     # get_supplier nests the place, so compare against the stored column.
     comparable = {**current, "place_id": current["place_id"]}

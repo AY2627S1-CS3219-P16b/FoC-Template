@@ -25,8 +25,10 @@ from fastapi.testclient import TestClient
 from app.admin_queries import (
     DuplicatePlaceError,
     DuplicateSupplierError,
+    InvalidHoursError,
     NoChangeError,
     UnknownPlaceError,
+    update_supplier,
 )
 from app.main import create_app
 
@@ -167,7 +169,8 @@ class AdminEndpointTests(unittest.TestCase):
              [(UnknownPlaceError, 404), (DuplicateSupplierError, 409)]),
             ("app.main.update_supplier", "patch", f"/api/v1/suppliers/{self.supplier_id}",
              {"name": "Renamed"},
-             [(UnknownPlaceError, 404), (DuplicateSupplierError, 409), (NoChangeError, 409)]),
+             [(UnknownPlaceError, 404), (DuplicateSupplierError, 409), (NoChangeError, 409),
+              (InvalidHoursError, 422)]),
             ("app.main.deactivate_supplier", "delete",
              f"/api/v1/suppliers/{self.supplier_id}", None, [(NoChangeError, 409)]),
             ("app.main.create_place", "post", "/api/v1/places", {"name": "Test Kiosk"},
@@ -201,6 +204,13 @@ class AdminEndpointTests(unittest.TestCase):
             ("post", "/api/v1/suppliers", {k: v for k, v in self.body.items()
                                            if k != "opening_time"}),
             ("post", "/api/v1/suppliers", {**self.body, "closing_time": "25:00"}),
+            # Equal times would never be open; "all day" is 00:00 to 23:59.
+            ("post", "/api/v1/suppliers", {**self.body, "opening_time": "09:00",
+                                           "closing_time": "09:00"}),
+            ("post", "/api/v1/suppliers", {**self.body, "opening_time": "00:00",
+                                           "closing_time": "00:00"}),
+            ("patch", f"/api/v1/suppliers/{self.supplier_id}",
+             {"opening_time": "10:00", "closing_time": "10:00"}),
             ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"opening_time": None}),
             # Operating days are required too, and must be real weekdays.
             ("post", "/api/v1/suppliers", {k: v for k, v in self.body.items()
@@ -240,6 +250,9 @@ class AdminEndpointTests(unittest.TestCase):
             body = self.call("post", "/api/v1/suppliers", self.body).json()
         self.assertEqual(body["operating_days"], ["MON", "TUE", "WED", "THU", "FRI"])
         self.assertIsInstance(body["is_open_now"], bool)
+        # Present either way: a timestamp while open, null while closed.
+        self.assertIn("closes_at", body)
+        self.assertEqual(body["closes_at"] is not None, body["is_open_now"])
 
     def test_removing_a_photo_is_an_audited_change_with_a_reason(self):
         path = f"/api/v1/suppliers/{self.supplier_id}"
@@ -338,3 +351,24 @@ class AdminEndpointTests(unittest.TestCase):
             self.call("patch", f"/api/v1/suppliers/{self.supplier_id}",
                       {"name": "Renamed"}, **REASON)
         self.assertEqual(edit.call_args.kwargs["changes"], {"name": "Renamed"})
+
+
+class UpdateHoursTests(unittest.TestCase):
+    """A PATCH may send one time; the pair it leaves behind must still open."""
+
+    def update(self, changes):
+        connection = MagicMock()
+        with patch("app.admin_queries.get_supplier", return_value=supplier_row()):
+            update_supplier(connection, actor_id=uuid4(), supplier_id=uuid4(),
+                            changes=changes, reason="hours changed")
+        return connection
+
+    def test_changing_one_time_to_match_the_stored_one_is_refused(self):
+        # Stored hours are 08:00 to 18:00.
+        for changes in ({"closing_time": time(8, 0)}, {"opening_time": time(18, 0)}):
+            with self.subTest(changes=changes), self.assertRaises(InvalidHoursError):
+                self.update(changes)
+
+    def test_changing_one_time_to_a_valid_range_is_written(self):
+        connection = self.update({"closing_time": time(20, 0)})
+        connection.execute.assert_called()

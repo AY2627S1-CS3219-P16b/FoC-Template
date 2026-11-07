@@ -237,11 +237,17 @@ Order Service can refuse an order placed while a supplier is shut.
   Octobox, every day.
 - **Trading past midnight** is stored with a closing time _earlier_ than the
   opening time, as Supersnacks does with `18:00` to `02:00`.
+- **Equal opening and closing times are refused** (422), because the range
+  would never be open. That includes `00:00` to `00:00`; use `00:00` to `23:59`.
+  A PATCH that changes one time is checked against the stored other one.
 - **Operating days** are stored as codes in week order, e.g.
   `{MON,TUE,WED,THU,FRI}`.
 
 "Is it open now?" is answered by `is_open()` in `app/hours.py`, in Singapore
-time, and returned on every supplier as `is_open_now`. Order Service should use
+time, and returned on every supplier as `is_open_now`. Every supplier also
+carries `closes_at`: when the current shift ends, as a `+08:00` timestamp, or
+`null` when it is closed now or never closes (open 24 hours every day). Order
+Service uses it to keep a request's acceptance deadline before closing time. Order Service should use
 that field rather than repeat the rule. It is not a plain range comparison:
 
 - When `closing_time < opening_time` the window wraps past midnight.

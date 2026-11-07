@@ -22,8 +22,15 @@ You can choose "Within 30 mins", "Within 45 mins" or "Within 1 hour". The
 deadline is how long couriers have to accept your request. If nobody accepts it
 in time, it expires and your reserved credit is returned.
 
-<!-- REVIEW: Options are hard-coded in CreateOrderModal.jsx:122-124 and
-App.jsx:797. Update if scheduled errands (N1) or custom deadlines are added. -->
+Near closing time, the deadline must end at least 10 minutes before the store
+closes, so a courier still has time to get there. Options that end later are
+unavailable, and the form shows when the store closes. If even 30 minutes no
+longer fits, you can't create a request for that store until it next opens.
+
+<!-- REVIEW: Options live in frontend/src/utils/deadlines.js; Order Service
+enforces the 60-minute maximum and the 10-minute closing buffer
+(order_queries.py). Update if scheduled errands (N1) or custom deadlines are
+added. -->
 
 ## How do I tell the courier where to deliver?
 

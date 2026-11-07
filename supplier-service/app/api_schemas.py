@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .classification import normalize_tags, validate_supplier_type
-from .hours import is_open, normalize_days
+from .hours import CAMPUS_TIMEZONE, check_hours, closes_at, is_open, normalize_days
 
 
 class PlaceSummary(BaseModel):
@@ -46,6 +46,9 @@ class SupplierResponse(BaseModel):
     # Computed in campus time when the response is built. Order Service should
     # check this before accepting an order rather than repeating the rule.
     is_open_now: bool
+    # When the current shift ends (campus time); null if closed now or if it
+    # never closes. Order Service keeps acceptance deadlines before this.
+    closes_at: datetime | None = None
     image_url: str | None = None
     pickup_instructions: str | None = None
     is_active: bool
@@ -53,6 +56,9 @@ class SupplierResponse(BaseModel):
     @classmethod
     def from_row(cls, row: dict) -> "SupplierResponse":
         """Build from a flat query row, nesting the place columns."""
+        # One clock reading, so is_open_now and closes_at always agree.
+        now = datetime.now(CAMPUS_TIMEZONE)
+        hours = (row["opening_time"], row["closing_time"], row["operating_days"])
         return cls(
             place=PlaceSummary(
                 id=row["place_id"],
@@ -60,8 +66,8 @@ class SupplierResponse(BaseModel):
                 parent_id=row["place_parent_id"],
                 parent_name=row["place_parent_name"],
             ),
-            is_open_now=is_open(row["opening_time"], row["closing_time"],
-                                row["operating_days"]),
+            is_open_now=is_open(*hours, now),
+            closes_at=closes_at(*hours, now),
             **{key: value for key, value in row.items() if not key.startswith("place_")},
         )
 
@@ -137,6 +143,14 @@ class SupplierCreate(BaseModel):
     @classmethod
     def known_days(cls, value: list[str] | None) -> list[str] | None:
         return None if value is None else normalize_days(value)
+
+    @model_validator(mode="after")
+    def hours_can_be_open(self):
+        # A PATCH may send only one of the two; update_supplier then checks
+        # the pair against the stored row.
+        if self.opening_time is not None and self.closing_time is not None:
+            check_hours(self.opening_time, self.closing_time)
+        return self
 
 
 class SupplierUpdate(SupplierCreate):

@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert
 from .database import create_database_engine
 from .places import canonical_place_records, normalize_place_name
 from .classification import normalize_tags, validate_supplier_type
-from .hours import parse_days
+from .hours import check_hours, parse_days
 from .schema import create_schema, places, suppliers
 
 
@@ -70,6 +70,7 @@ def read_suppliers(path: Path) -> list[dict]:
                 "operating_days": parse_days(values["OperatingDays"]),
                 "image_url": values["ImageURL"] or None,
             }
+            check_hours(record["opening_time"], record["closing_time"])
             for field, limit in (("latitude", 90), ("longitude", 180)):
                 if record[field] is not None and not -limit <= record[field] <= limit:
                     raise ValueError(f"{field} out of range")

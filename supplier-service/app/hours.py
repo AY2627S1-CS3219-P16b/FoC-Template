@@ -6,7 +6,7 @@ shift belongs to the day it started: Supersnacks open 18:00 to 02:00 on Friday
 is still open at 01:00 on Saturday even if it does not trade on Saturday.
 """
 
-from datetime import datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 DAYS = ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
 
@@ -19,6 +19,19 @@ OPEN_ALL_DAY = (time(0, 0), time(23, 59))
 # Shorthand accepted in the seed CSV, alongside ranges such as MON-FRI and
 # lists such as MON,WED,FRI.
 DAY_ALIASES = {"DAILY": DAYS, "WEEKDAYS": DAYS[:5], "WEEKENDS": DAYS[5:]}
+
+
+def check_hours(opening: time, closing: time) -> None:
+    """Refuse a range that would never be open.
+
+    Equal times read as "closes the moment it opens". Admins who mean "never
+    closes" usually type 00:00 to 00:00, so the message names the spelling FoC
+    stores for that.
+    """
+    if opening == closing:
+        raise ValueError(
+            "opening and closing times must differ; use 00:00 to 23:59 for open 24 hours"
+        )
 
 
 def normalize_days(values: list[str]) -> list[str]:
@@ -65,3 +78,34 @@ def is_open(opening: time, closing: time, days: list[str], now: datetime | None 
     # Past midnight: the evening part of today's shift, or the early-morning
     # tail of yesterday's.
     return (today in days and current >= opening) or (yesterday in days and current < closing)
+
+
+def _at(day: date, moment: time) -> datetime:
+    return datetime.combine(day, moment, tzinfo=CAMPUS_TIMEZONE)
+
+
+def closes_at(opening: time, closing: time, days: list[str],
+              now: datetime | None = None) -> datetime | None:
+    """When the shift trading at `now` ends, in campus time.
+
+    None when the supplier is closed now, or when it never closes (open all
+    day, every day). Order Service uses this so a request's acceptance deadline
+    leaves a courier time to reach the store before it shuts.
+    """
+    now = (now or datetime.now(CAMPUS_TIMEZONE)).astimezone(CAMPUS_TIMEZONE)
+    if not is_open(opening, closing, days, now):
+        return None
+    today = now.date()
+
+    if (opening, closing) == OPEN_ALL_DAY:
+        # Open until midnight before the first day it does not trade.
+        for ahead in range(1, 7):
+            if DAYS[(now.weekday() + ahead) % 7] not in days:
+                return _at(today + timedelta(days=ahead), time(0, 0))
+        return None
+    if opening < closing:
+        return _at(today, closing)
+    # Past midnight: tonight's shift ends tomorrow; the early-morning tail of
+    # yesterday's shift ends today.
+    current = now.time().replace(tzinfo=None)
+    return _at(today + timedelta(days=1), closing) if current >= opening else _at(today, closing)

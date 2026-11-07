@@ -128,6 +128,10 @@ const Required = () => (
  * fields is at fault.
  */
 function missingForSupplier({ form, reason, isNew, hasChanges }) {
+  // Equal times would never be open; the backend refuses them too.
+  if (form.opening_time && form.opening_time === form.closing_time) {
+    return "Opening and closing times must differ. For open 24 hours, use 00:00 to 23:59.";
+  }
   if (isNew) {
     const missing = [
       !form.name.trim() && "a name",
