@@ -24,7 +24,7 @@ def main():
         started = perf_counter()
         query = np.array(embedder.query(case["question"]))
         scores = vectors @ query / (np.linalg.norm(vectors, axis=1) * np.linalg.norm(query))
-        best = np.argsort(-scores)[:4]
+        best = np.argsort(-scores)[:5]
         latencies.append((perf_counter() - started) * 1000)
         selected = [corpus.chunks[i].question for i in best if scores[i] >= settings.min_similarity]
         if case["expected"]:
@@ -36,7 +36,7 @@ def main():
         print(json.dumps({"question": case["question"], "expected": case["expected"],
                           "top_score": round(float(scores[best[0]]), 4), "retrieved": selected}))
     print(json.dumps({"chunks": len(corpus.chunks), "indexing_ms": round(indexing_ms, 2),
-                      "supported_recall_at_4": f"{hits}/{supported}",
+                      "supported_recall_at_5": f"{hits}/{supported}",
                       "out_of_scope_rejected_by_threshold": f"{ood_rejected}/{ood_count}",
                       "embedding_and_in_memory_search_p50_ms": round(float(np.median(latencies)), 2),
                       "embedding_and_in_memory_search_p95_ms": round(float(np.percentile(latencies, 95)), 2)}))

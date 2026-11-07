@@ -38,7 +38,7 @@ You must do these steps in order.
 ## When do I get paid for an errand?
 
 You receive the reward credit after you mark the errand delivered and the
-requester confirms receipt. The credit arrives a moment after confirmation;
+requester confirms receipt. The credit arrives a moment after confirmation.
 Receipt is confirmed automatically after the configured window (24 hours by
 default) if the requester does not confirm. Transfer then runs asynchronously;
 if credit processing needs admin attention, the order shows a warning.

@@ -1,36 +1,73 @@
 # FAQ retrieval evaluation
 
-Latest run: 2026-11-07, inside the FAQ service Docker image, with
-`FAQ_MIN_SIMILARITY=0.65` and 65 FAQ entries.
+Run: 2026-11-08 inside the FAQ service Docker image, with 65 FAQ entries and
+`FAQ_MIN_SIMILARITY=0.65`. The test set in `evaluation/questions.json` has 100
+questions:
 
-| Check | Result |
-|---|---|
-| Supported questions that found their expected FAQ entry in the top four | 16 / 18 |
-| Unrelated questions rejected by the threshold | 3 / 3 |
-| Warm embedding + in-memory search | 10.8 ms median, 14.45 ms p95 |
+- 85 supported questions covering all 65 FAQ entries: 71 clearly worded and 14
+  vague ones (marked `"kind": "vague"`, e.g. "cancel", "balance", "stuck pending").
+- 15 unrelated questions, including NUS questions that look close to FoC topics
+  (NUSNET password, hostel applications) and a prompt-injection attempt.
 
-Timings exclude PostgreSQL and Claude and vary across machines.
+## Retrieval depth (top-k)
 
-## Known misses
+From `python -m app.evaluate_k`. "Retrieved" means the expected entry is in the
+top k and passes the threshold, which is what the API sends to Claude.
 
-Both are short, vague phrasings that score just under the threshold, so they get
-the fallback answer instead of an FAQ answer:
+| k | Expected entry in top k | Retrieved (all) | Clear | Vague | Avg chunks sent to Claude | Unrelated rejected by threshold |
+|---|---|---|---|---|---|---|
+| 1 | 56 / 85 | 49 / 85 | 41 / 71 | 8 / 14 | 0.85 | 13 / 15 |
+| 2 | 70 / 85 | 61 / 85 | 52 / 71 | 9 / 14 | 1.58 | 13 / 15 |
+| 3 | 77 / 85 | 67 / 85 | 58 / 71 | 9 / 14 | 2.19 | 13 / 15 |
+| 4 | 79 / 85 | 68 / 85 | 59 / 71 | 9 / 14 | 2.69 | 13 / 15 |
+| 5 (current) | 81 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 3.14 | 13 / 15 |
+| 8 | 82 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 4.29 | 13 / 15 |
 
-| Question | Expected FAQ entry | Top score |
-|---|---|---|
-| The runner still hasn't arrived after an hour | My courier is late and my items haven't arrived. What can I do? | 0.629 |
-| who are u | Who are you, and what can FoC Help do? | 0.602 |
+Mean reciprocal rank of the expected entry: 0.783.
 
-They stay in the set as known limitations rather than being tuned away.
+- Of the 70 expected entries that pass the threshold, 49 rank 1st, 11 rank 2nd,
+  7 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
+- 15 supported questions miss because their expected entry scores below 0.65,
+  whatever k is. Vague wording is the main cause: 5 of the 14 vague questions miss
+  this way ("cancel" 0.619, "balance" 0.579, "profile" 0.507), compared with 10 of
+  the 71 clear ones.
+- Two unrelated questions pass the threshold by matching "How do I create an
+  account?": "How do I reset my NUSNET password?" (0.727) and "How do I apply for a
+  hostel at NUS?" (0.671). Claude is then the second check (see below).
 
-## Why the threshold stays at 0.65
+## End-to-end evaluation (retrieval + generation)
 
-Lowering it would catch these phrasings, but the margin over unrelated
-questions is too small. Other ways of asking who the assistant is scored
-0.58-0.63 ("who are you?" 0.578, "what can you do" 0.608, "are you a bot"
-0.630), while unrelated questions scored up to 0.52-0.54 ("tell me a joke"
-0.524, "Write a JavaScript sorting algorithm" 0.544).
+The retrieval table above measures only what reaches Claude. This check measures
+what the user actually receives: 20 questions were sent to the running service
+(`claude-haiku-5-5`, threshold 0.65, run at k = 4 before the change to k = 5). The
+sample was weighted towards hard cases (vague phrasing, out-of-scope NUS
+questions), so it is a stress test rather than a picture of typical traffic.
 
-Instead, the fallback answer says what FoC Help can help with and suggests
-rephrasing, so a missed question still gets a useful reply. The order "Get help"
-suggestions send exact FAQ questions, so they are not affected by the threshold.
+The first run exposed two prompt issues:
+
+- **Meta-references:** one answer described its own knowledge ("The information I
+  have covers creating a FoC account") instead of stating the information.
+- **Out-of-scope leakage:** the two unrelated NUS questions that passed the
+  threshold received a refusal followed by unrelated FoC account-creation steps,
+  with a citation.
+
+The system prompt in `app/support.py` now requires Claude to first classify
+whether the question concerns FoC and, if not, to cite no sources, so the fixed
+fallback is returned. It also explicitly forbids meta-references. Results after
+the change:
+
+| Question type | Count | System behaviour | Expected behaviour? |
+|---|---|---|---|
+| In-scope, relevant entry retrieved | 8 | Grounded answer with citations | Yes |
+| Out-of-scope | 4 | Fixed fallback (abstained) | Yes |
+| Assistant identity ("who are u") | 1 | Fixed fallback, which describes FoC Help | Acceptable |
+| In-scope, relevant entry below threshold | 7 | Fixed fallback (abstained) | No (false negative) |
+| Meta-references in any answer | 0 / 20 | | Yes |
+
+No answer was incorrect or ungrounded. The 7 false negatives are retrieval
+failures, not generation failures: their expected entry scored below 0.65 (for
+example "cancel", "balance", "Can I use it if I'm from NTU?"), so Claude never
+received it and correctly abstained rather than answering without evidence. These
+are the same threshold misses shown in the retrieval results.
+
+LLM output varies between runs, so this is a spot check, not a guarantee.

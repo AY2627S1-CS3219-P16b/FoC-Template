@@ -82,7 +82,7 @@ class Store:
                 id=1, version=corpus.version, embedding_profile=EMBEDDING_PROFILE,
             ))
 
-    def retrieve(self, vector, expected_version, min_similarity, limit=4):
+    def retrieve(self, vector, expected_version, min_similarity, limit=5):
         distance = faq_chunks.c.embedding.cosine_distance(vector)
         with self.engine.connect() as connection:
             if not self._index_matches(connection, expected_version):

@@ -46,6 +46,10 @@ second, after which the request becomes open to couriers. If it stays pending
 longer, credit processing is temporarily delayed; FoC retries automatically and
 updates the request on its own, so you don't need to submit it again.
 
+If the retries keep failing, FoC stops retrying and the request shows "Credit
+processing needs admin attention". It stays pending until an admin retries the
+credit processing. No credits are lost or charged twice while it waits.
+
 ## When can couriers see my request?
 
 Only after your reward credit has been reserved. Once that happens, the request
@@ -58,7 +62,8 @@ it or the deadline passes.
   or paid. The request updates automatically. A needs-admin-attention warning
   means credit processing has stopped until an admin resolves it.
 - **Open**: waiting for a courier to accept it.
-- **Accepted**: a courier has taken your errand.
+- **Accepted**: a courier has taken your errand. If the courier gives it back
+  before pickup, it returns to Open for another courier.
 - **Picked up**: the courier has collected your items.
 - **Delivered**: the courier says the items were delivered. Please confirm receipt.
 - **Completed**: receipt was confirmed and the courier has been paid.
@@ -70,7 +75,8 @@ it or the deadline passes.
 
 Yes, while it is still open and no courier has accepted it. Click "Cancel
 Request" under "My Requests". Your reserved credit is returned a moment later.
-Once a courier has accepted the request, it can no longer be cancelled.
+Once a courier has accepted the request, it can no longer be cancelled. If the
+courier gives it back before pickup, it is open again and you can cancel it.
 
 <!-- REVIEW: No cancellation or dispute flow exists after acceptance. Update if
 the team adds one (e.g. N1 failed-order/dispute management). -->
