@@ -14,6 +14,9 @@ from app.database import create_database_engine
 from app.schema import places, suppliers
 from app.seed import DEFAULT_CSV, read_suppliers, seed
 
+# Data rows in the seed CSV, counted independently of read_suppliers.
+CSV_ROWS = len(list(csv.DictReader(io.StringIO(DEFAULT_CSV.read_text(encoding="utf-8-sig")))))
+
 
 # Required columns, supplied where the test is about some other constraint.
 HOURS = {"opening_time": "08:00", "closing_time": "18:00", "operating_days": ["MON"]}
@@ -34,7 +37,8 @@ class PlaceNormalizationTests(unittest.TestCase):
 
     def test_csv_matches_authored_names(self):
         rows = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(len(rows), 54)
+        # Every row is read; the count follows the CSV as suppliers are added.
+        self.assertEqual(len(rows), CSV_ROWS)
         instachef = next(row for row in rows if row["name"] == "InstaChef")
         self.assertEqual(instachef["place_key"], "com3")
         self.assertEqual(instachef["location_description"], "Beside Terrace, near the foyer")
@@ -113,13 +117,18 @@ class PlaceDatabaseTests(unittest.TestCase):
 
     def test_import_matching_constraints_and_preservation(self):
         records = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(seed(self.db, records), (54, 54))
-        self.assertEqual(seed(self.db, records), (0, 54))
+        total = len(records)
+        self.assertEqual(seed(self.db, records), (total, total))
+        self.assertEqual(seed(self.db, records), (0, total))
         with self.db.begin() as connection:
-            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 24)
-            for value, expected in (("COM 2", 2), ("com2", 2), ("Com2", 2), ("Central Square", 4),
-                                    ("Yusof Ishak House", 4), ("UTown", 16),
-                                    ("Prince George’s Park", 4), ("Prince George's Park", 4)):
+            self.assertEqual(connection.scalar(select(func.count()).select_from(places)),
+                             len(canonical_place_records()))
+            # Spelling variants of a place find the suppliers the CSV puts there.
+            for value in ("COM 2", "com2", "Com2", "Central Square", "Yusof Ishak House",
+                          "UTown", "Prince George’s Park", "Prince George's Park"):
+                key = normalize_place_name(value)
+                expected = sum(record["place_key"] == key for record in records)
+                self.assertGreater(expected, 0, value)
                 count = connection.scalar(select(func.count()).select_from(
                     suppliers.join(places)
                 ).where(places.c.search_key == normalize_place_name(value)))
@@ -181,7 +190,7 @@ class PlaceDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 name="Edited supplier", is_active=False
             ))
-        self.assertEqual(seed(self.db, records), (0, 54))
+        self.assertEqual(seed(self.db, records), (0, len(records)))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["name"], "Edited supplier")

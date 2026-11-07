@@ -36,9 +36,10 @@ class ClassificationTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             validate_supplier_type("COFFEE")
         rows = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(Counter(row["supplier_type"] for row in rows),
-                         {"FOOD_BEVERAGE": 41, "RETAIL": 8, "FACILITY": 5})
-        self.assertEqual(sum("coffee" in row["tags"] for row in rows), 8)
+        # Every category is used, and nothing outside them; counts grow with the CSV.
+        self.assertEqual(set(Counter(row["supplier_type"] for row in rows)),
+                         {"FOOD_BEVERAGE", "RETAIL", "FACILITY"})
+        self.assertGreater(sum("coffee" in row["tags"] for row in rows), 0)
 
     def test_unknown_csv_type_is_not_silently_guessed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -92,17 +93,24 @@ class ClassificationDatabaseTests(unittest.TestCase):
 
     def test_category_tag_storage_and_constraints(self):
         records = read_suppliers(DEFAULT_CSV)
-        self.assertEqual(seed(self.db, records), (54, 54))
+        self.assertEqual(seed(self.db, records), (len(records), len(records)))
         with self.db.begin() as connection:
             stored = connection.execute(select(suppliers)).mappings().all()
+            # Stored exactly as read from the CSV.
             self.assertEqual(Counter(row["supplier_type"] for row in stored),
-                             {"FOOD_BEVERAGE": 41, "RETAIL": 8, "FACILITY": 5})
-            self.assertEqual(sum("coffee" in row["tags"] for row in stored), 8)
+                             Counter(record["supplier_type"] for record in records))
+            self.assertEqual(sum("coffee" in row["tags"] for row in stored),
+                             sum("coffee" in record["tags"] for record in records))
             from app.supplier_queries import list_suppliers
+            # A search finds suppliers tagged "coffee" as well as those with it
+            # in their name (e.g. Luckin Coffee); no place name contains it.
+            expected = {r["id"] for r in records
+                        if "coffee" in r["tags"] or "coffee" in r["name"].casefold()}
+            self.assertTrue(any("coffee" in r["tags"] and "coffee" not in r["name"].casefold()
+                                for r in records))   # some match only through a tag
             for search in ("cof", "coffee", "COFFEE"):
                 matches = list_suppliers(connection, search=search)
-                self.assertEqual(len(matches), 8)
-                self.assertTrue(all("coffee" in row["tags"] for row in matches))
+                self.assertEqual({row["id"] for row in matches}, expected)
 
             place_id = connection.scalar(select(places.c.id).limit(1))
             row = connection.execute(insert(suppliers).values(
@@ -124,7 +132,8 @@ class ClassificationDatabaseTests(unittest.TestCase):
             connection.execute(update(suppliers).where(suppliers.c.id == records[0]["id"]).values(
                 tags=["Admin Tag"], supplier_type="RETAIL"
             ))
-        self.assertEqual(seed(self.db, records), (0, 55))
+        # The CSV rows plus the "New cafe" added above.
+        self.assertEqual(seed(self.db, records), (0, len(records) + 1))
         with self.db.connect() as connection:
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["tags"], ["admin tag"])

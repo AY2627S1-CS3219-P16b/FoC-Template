@@ -16,7 +16,7 @@ Octobox,RETAIL,convenience,UTown,,,,,0000hrs,2359hrs,/images/suppliers/octobox-u
 Subway,FOOD_BEVERAGE,,UTown,,,,,0830hrs,2130hrs,/images/suppliers/subway.webp,DAILY
 Smooy,FOOD_BEVERAGE,,COM3,1,,1.2948308,103.7716305,1130hrs,1730hrs,/images/suppliers/smooy.webp,MON-FRI
 Waa Cow!,FOOD_BEVERAGE,,UTown,,,,,1130hrs,2030hrs,/images/suppliers/waa-cow.webp,DAILY
-Bueno Bueno,FOOD_BEVERAGE,,UTown,,,,,1130hrs,2030hrs,,DAILY
+Bueno Bueno,FOOD_BEVERAGE,,UTown,,,,,1130hrs,2030hrs,/images/suppliers/bueno-bueno-utown.webp,DAILY
 Goh Bros E-Print Pte Ltd,FACILITY,printing,Yusof Ishak House,5,Take the long staircase up YIH,1.2984905,103.7720544,0900hrs,1800hrs,/images/suppliers/goh-bros-yih.webp,MON-FRI
 Cheers,RETAIL,convenience,Engineering Block E3,4,,1.2994341,103.7526298,0000hrs,2359hrs,/images/suppliers/cheers-e3.webp,DAILY
 Cheers,RETAIL,convenience,Yusof Ishak House,,,,,0000hrs,2359hrs,/images/suppliers/cheers-yih.webp,DAILY
@@ -50,6 +50,22 @@ Bakehaus / Aurea,FOOD_BEVERAGE,,The Ridge,,,,,0800hrs,2100hrs,/images/suppliers/
 Sloppy B,FOOD_BEVERAGE,,University Sports Centre,,,,,1000hrs,2000hrs,/images/suppliers/sloppy-b-usc.webp,MON-FRI
 QQ Rice,FOOD_BEVERAGE,,Science Block S16,,,,,0730hrs,1900hrs,/images/suppliers/qq-rice-s16.webp,MON-FRI
 South & East,FOOD_BEVERAGE,,Shaw Foundation Alumni House,,,,,1130hrs,2200hrs,/images/suppliers/south-and-east-sfah.webp,MON-FRI
+Mr Bean / Do Qoo,FOOD_BEVERAGE,,UTown,1,At Town Plaza,,,0730hrs,1930hrs,/images/suppliers/mr-bean-utown.webp,DAILY
+Sapore,FOOD_BEVERAGE,,Stephen Riady Centre,1,Italian restaurant at #01-09,,,1130hrs,2000hrs,/images/suppliers/sapore-src.webp,DAILY
+Local Noodles,FOOD_BEVERAGE,,The Terrace,,Stall S02A,,,0800hrs,1900hrs,/images/suppliers/local-noodles-terrace.webp,MON-FRI
+Luckin Coffee,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2100hrs,/images/suppliers/luckin-coffee-flavours.webp,DAILY
+Japanese,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/japanese-flavours.webp,DAILY
+Koka Noodle,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/koka-noodle-flavours.webp,DAILY
+Mala Hot Pot Sichuan Cuisine,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/mala-hot-pot-flavours.webp,DAILY
+Mini Wok,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/mini-wok-flavours.webp,DAILY
+Mixed Veg Rice,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/mixed-veg-rice-flavours.webp,DAILY
+Pondok Nasi Lemak,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/pondok-nasi-lemak-flavours.webp,DAILY
+Danlao Scrambled Egg Rice,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/danlao-scrambled-egg-rice-flavours.webp,DAILY
+Su Xiang Yuan Vegetarian,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/su-xiang-yuan-flavours.webp,DAILY
+The Whale Tea,FOOD_BEVERAGE,bubble tea,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/the-whale-tea-flavours.webp,DAILY
+Yong Tau Foo,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/yong-tau-foo-flavours.webp,DAILY
+Yu Xiang Fang,FOOD_BEVERAGE,,Flavours,,,,,0730hrs,2030hrs,/images/suppliers/yu-xiang-fang-flavours.webp,DAILY
+Chicha San Chen,FOOD_BEVERAGE,bubble tea,Fine Food,,,,,1100hrs,1930hrs,/images/suppliers/chicha-san-chen-fine-food.webp,DAILY
 SPX Locker,FACILITY,parcel,Stephen Riady Centre,1,Opposite Subway,,,0000hrs,2359hrs,/images/suppliers/spx-locker-src.webp,DAILY
 SPX Locker,FACILITY,parcel,Prince George's Park,,,,,0000hrs,2359hrs,,DAILY
 SPX Locker,FACILITY,parcel,UTown Residence,,North Tower,,,0000hrs,2359hrs,/images/suppliers/spx-locker-utown-residence.webp,DAILY
