@@ -10,13 +10,18 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 ---
 
-## Team Members
+## Team Contributions
 
-| Name             | Role           |
-| ---------------- | -------------- |
-| Chong Yi Jie     | Your ownership |
-| Jessica Ange Xu  | Your ownership |
-| Aurora Yufei Shi | Your ownership |
+| Team member | Main contributions | Nice-to-have (N2H) contributions |
+| --- | --- | --- |
+| Aurora Yufei Shi | Built the initial UI, Credit Service, and Order Service. | None. |
+| Jessica Ange Xu | Built the User Service and worked on the RAG FAQ assistant. | RAG-based FAQ and support (N2), shared with Yi Jie. |
+| Chong Yi Jie | Built the Supplier Service, updated the UI, and worked on the RAG FAQ assistant. | RAG-based FAQ and support (N2), shared with Jessica. |
+
+The FAQ assistant helps users find answers about accounts, suppliers, errands,
+and credits without leaving the app. It retrieves relevant passages from our
+support documentation and uses them to answer questions, with links to the
+sources. Jessica and Yi Jie contributed to this feature together.
 
 ---
 
@@ -81,11 +86,13 @@ microservice lives in its own top-level folder with its own Dockerfile.
 └── startup.md           # Setup and run guide
 ```
 
-- Any **nice-to-have (N2H)** feature that warrants its own service should
-  be added as an **additional folder** at the same level, following the
-  same per-service structure.
-- Files for agentic coding tools (e.g. agent configs, prompts, skills)
-  may be added as needed, but must still **respect the
-  one-service-per-folder skeleton** for core implementation.
+## AI Use Summary
 
----
+We used AI tools, including OpenAI Codex, to help review teammates' pull requests,
+fix syntax errors, review TDD and implementation plans, and write boilerplate
+code. Codex also helped review the implementation against the project brief and
+edit this README.
+
+The team remains responsible for checking the suggestions and understanding the
+submitted code. Recorded prompts, key responses, and verification notes are in
+our [AI usage log](ai/usage-log.md). 
