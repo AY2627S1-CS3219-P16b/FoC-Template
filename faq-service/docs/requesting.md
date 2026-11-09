@@ -27,11 +27,6 @@ closes, so a courier still has time to get there. Options that end later are
 unavailable, and the form shows when the store closes. If even 30 minutes no
 longer fits, you can't create a request for that store until it next opens.
 
-<!-- REVIEW: Options live in frontend/src/utils/deadlines.js; Order Service
-enforces the 60-minute maximum and the 10-minute closing buffer
-(order_queries.py). Update if scheduled errands (N1) or custom deadlines are
-added. -->
-
 ## How do I tell the courier where to deliver?
 
 Type your delivery location in the "Delivery Location" field when you create the
@@ -78,9 +73,6 @@ Request" under "My Requests". Your reserved credit is returned a moment later.
 Once a courier has accepted the request, it can no longer be cancelled. If the
 courier gives it back before pickup, it is open again and you can cancel it.
 
-<!-- REVIEW: No cancellation or dispute flow exists after acceptance. Update if
-the team adds one (e.g. N1 failed-order/dispute management). -->
-
 ## Can I edit my request after creating it?
 
 No. To change the items, delivery location or deadline, cancel the request
@@ -104,7 +96,6 @@ Delivered requests show the automatic confirmation deadline in My Requests.
 Receipt is confirmed automatically after the configured window (24 hours after
 delivery by default), and the courier's reward transfer is queued. Confirm
 receipt yourself once you have the items.
-
 
 ## It says delivered, but I didn't receive my items. What should I do?
 
