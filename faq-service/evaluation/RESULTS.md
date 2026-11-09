@@ -1,7 +1,7 @@
 # FAQ retrieval evaluation
 
 Run: 2026-11-09 inside the FAQ service Docker image, with 65 FAQ entries and
-`FAQ_MIN_SIMILARITY=0.65`. The test set in `evaluation/questions.json` has 100
+`FAQ_MIN_SIMILARITY=0.60`. The test set in `evaluation/questions.json` has 100
 questions:
 
 - 85 supported questions covering all 65 FAQ entries: 71 clearly worded and 14
@@ -16,24 +16,38 @@ top k and passes the threshold, which is what the API sends to Claude.
 
 | k | Expected entry in top k | Retrieved (all) | Clear | Vague | Avg chunks sent to Claude | Unrelated rejected by threshold |
 |---|---|---|---|---|---|---|
-| 1 | 57 / 85 | 50 / 85 | 42 / 71 | 8 / 14 | 0.85 | 13 / 15 |
-| 2 | 70 / 85 | 61 / 85 | 52 / 71 | 9 / 14 | 1.56 | 13 / 15 |
-| 3 | 78 / 85 | 67 / 85 | 58 / 71 | 9 / 14 | 2.15 | 13 / 15 |
-| 4 | 79 / 85 | 68 / 85 | 59 / 71 | 9 / 14 | 2.66 | 13 / 15 |
-| 5 (current) | 81 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 3.11 | 13 / 15 |
-| 8 | 82 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 4.26 | 13 / 15 |
+| 1 | 57 / 85 | 56 / 85 | 46 / 71 | 10 / 14 | 0.95 | 11 / 15 |
+| 2 | 70 / 85 | 67 / 85 | 56 / 71 | 11 / 14 | 1.81 | 11 / 15 |
+| 3 | 78 / 85 | 74 / 85 | 62 / 71 | 12 / 14 | 2.61 | 11 / 15 |
+| 4 | 79 / 85 | 75 / 85 | 63 / 71 | 12 / 14 | 3.35 | 11 / 15 |
+| 5 (current) | 81 / 85 | 77 / 85 | 65 / 71 | 12 / 14 | 4.07 | 11 / 15 |
+| 8 | 82 / 85 | 77 / 85 | 65 / 71 | 12 / 14 | 5.99 | 11 / 15 |
 
 Mean reciprocal rank of the expected entry: 0.790.
 
-- Of the 70 expected entries that pass the threshold, 50 rank 1st, 11 rank 2nd,
-  6 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
-- 15 supported questions miss because their expected entry scores below 0.65,
-  whatever k is. Vague wording is the main cause: 5 of the 14 vague questions miss
-  this way ("cancel" 0.615, "balance" 0.579, "profile" 0.512), compared with 10 of
-  the 71 clear ones.
-- Two unrelated questions pass the threshold by matching "How do I create an
-  account?": "How do I reset my NUSNET password?" (0.727) and "How do I apply for a
-  hostel at NUS?" (0.671). Claude is then the second check (see below).
+- Of the 77 expected entries that are retrieved, 56 rank 1st, 11 rank 2nd,
+  7 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
+- 8 supported questions miss at k = 5. Six score below 0.60 whatever k is
+  ("balance" 0.579, "profile" 0.507, "who are u" 0.541, "When does the canteen
+  close?" 0.538); the other two have an expected entry above the threshold but
+  ranked below 5th.
+- Four unrelated questions pass the threshold: "How do I reset my NUSNET
+  password?" (0.727), "How do I apply for a hostel at NUS?" (0.671), "What time
+  does the library close?" (0.612) and "Can you do my CS3219 assignment?" (0.602).
+  Claude is then the second check; all four were refused live (see below).
+
+### Threshold comparison (k = 5)
+
+The same run at three thresholds. Lowering the threshold retrieves more vague
+questions but lets more unrelated questions reach Claude.
+
+| Threshold | Retrieved (all) | Clear | Vague | Unrelated rejected by threshold |
+|---|---|---|---|---|
+| 0.65 | 70 / 85 | 61 / 71 | 9 / 14 | 13 / 15 |
+| 0.60 (current) | 77 / 85 | 65 / 71 | 12 / 14 | 11 / 15 |
+| 0.55 | 80 / 85 | 67 / 71 | 13 / 14 | 10 / 15 |
+
+The team chose 0.60.
 
 ## End-to-end evaluation (retrieval + generation)
 
@@ -69,5 +83,16 @@ failures, not generation failures: their expected entry scored below 0.65 (for
 example "cancel", "balance", "Can I use it if I'm from NTU?"), so Claude never
 received it and correctly abstained rather than answering without evidence. These
 are the same threshold misses shown in the retrieval results.
+
+### Live check after lowering the threshold to 0.60
+
+All 15 unrelated questions and the 7 supported questions that 0.60 newly
+retrieves were sent to the running service (`claude-haiku-5-5`, k = 5,
+threshold 0.60) on 2026-11-09.
+
+| Question type | Count | System behaviour | Expected behaviour? |
+|---|---|---|---|
+| Unrelated, including the 4 that pass the threshold | 15 | Fixed fallback, no sources | Yes |
+| Newly retrieved supported questions ("cancel", "refund", "where is my stuff", "Can I use it if I'm from NTU?", …) | 7 | Grounded answer with citations | Yes |
 
 LLM output varies between runs, so this is a spot check, not a guarantee.

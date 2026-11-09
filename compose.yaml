@@ -269,7 +269,7 @@ services:
       DATABASE_URL: postgresql+psycopg://faq_service:${FAQ_DB_PASSWORD:?Set FAQ_DB_PASSWORD in .env}@faq-db:5432/faq_db
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-haiku-5-5}
-      FAQ_MIN_SIMILARITY: ${FAQ_MIN_SIMILARITY:-0.65}
+      FAQ_MIN_SIMILARITY: ${FAQ_MIN_SIMILARITY:-0.60}
       FAQ_REQUESTS_PER_MINUTE: ${FAQ_REQUESTS_PER_MINUTE:-30}
     volumes:
       - ./faq-service/docs:/app/docs:ro

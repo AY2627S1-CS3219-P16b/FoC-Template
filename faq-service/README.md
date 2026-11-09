@@ -34,7 +34,7 @@ regenerating its existing secrets:
 FAQ_DB_PASSWORD=<a-new-unique-database-password>
 ANTHROPIC_API_KEY=<your-Anthropic-API-key>
 ANTHROPIC_MODEL=claude-haiku-5-5
-FAQ_MIN_SIMILARITY=0.65
+FAQ_MIN_SIMILARITY=0.60
 FAQ_REQUESTS_PER_MINUTE=30
 ```
 
