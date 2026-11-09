@@ -209,6 +209,20 @@ export function createPlace({ token, place }) {
   });
 }
 
+/** Renames a location. Its parent cannot change, so the tree cannot loop. */
+export function renamePlace({ token, placeId, name, reason }) {
+  return adminRequest(`/api/v1/places/${encodeURIComponent(placeId)}`, {
+    token, method: "PATCH", data: { name }, reason, action: "rename this location",
+  });
+}
+
+/** Deletes a location that no supplier or other location uses. */
+export function deletePlace({ token, placeId, reason }) {
+  return adminRequest(`/api/v1/places/${encodeURIComponent(placeId)}`, {
+    token, method: "DELETE", reason, action: "delete this location",
+  });
+}
+
 export function fetchSupplierAuditLogs({ token, page = 1, pageSize = 10 }) {
   return sendAuthenticatedRequest(
     `${API_BASE_URL}/api/v1/supplier-changes?page=${page}&page_size=${pageSize}`,

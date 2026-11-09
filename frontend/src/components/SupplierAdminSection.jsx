@@ -6,11 +6,13 @@ import {
   createPlace,
   createSupplier,
   deactivateSupplier,
+  deletePlace,
   fetchPlaces,
   fetchSupplierAuditLogs,
   fetchSuppliers,
   formatDays,
   formatPlace,
+  renamePlace,
   supplierImageSrc,
   updateSupplier,
   uploadSupplierImage,
@@ -99,12 +101,16 @@ const CATEGORY_LABELS = Object.fromEntries(
 
 /** What happened and to what, as "Added location" plus "UTown". */
 function auditTitle(entry, describe) {
+  // A deleted location only has its old name. A rename lists old → new below.
   const subject = entry.new_value.name
+    || entry.previous_value?.name
     || describe(entry.entity_type === "PLACE" ? "parent_id" : "place_id", entry.entity_id)
     || "a record";
   const noun = entry.entity_type === "PLACE" ? "location" : "supplier";
   const actions = {
     PLACE_CREATED: "Added location",
+    PLACE_RENAMED: "Renamed location",
+    PLACE_DELETED: "Deleted location",
     SUPPLIER_CREATED: "Added supplier",
     SUPPLIER_DEACTIVATED: "Hid supplier",
     SUPPLIER_UPDATED: entry.new_value.is_active === true
@@ -199,6 +205,16 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
   const [filter, setFilter] = useState("");
   const [placeName, setPlaceName] = useState("");
   const [placeParent, setPlaceParent] = useState("");
+  // Shown inside the New location card, which sits far below the page banner.
+  const [placeError, setPlaceError] = useState("");
+  const [placeMessage, setPlaceMessage] = useState("");
+  // Editing an existing location: rename it, or delete it if nothing uses it.
+  const [editPlaceId, setEditPlaceId] = useState("");
+  const [editPlaceName, setEditPlaceName] = useState("");
+  const [editPlaceReason, setEditPlaceReason] = useState("");
+  const [editPlaceError, setEditPlaceError] = useState("");
+  const [editPlaceMessage, setEditPlaceMessage] = useState("");
+  const [confirmPlaceDelete, setConfirmPlaceDelete] = useState(false);
   const [auditLogs, setAuditLogs] = useState([]);
   const [auditPage, setAuditPage] = useState(1);
   const [auditTotal, setAuditTotal] = useState(0);
@@ -396,16 +412,76 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
     }, "Supplier restored.");
   };
 
-  const addPlace = (event) => {
+  const addPlace = async (event) => {
     event.preventDefault();
-    return run(async () => {
+    setBusy(true);
+    setPlaceError("");
+    setPlaceMessage("");
+    try {
+      const name = placeName.trim();
       await createPlace({
         token,
-        place: { name: placeName.trim(), parent_id: placeParent || null },
+        place: { name, parent_id: placeParent || null },
       });
       setPlaceName("");
       setPlaceParent("");
-    }, "Location created.");
+      setPlaceMessage(`Location "${name}" created.`);
+      setAuditPage(1);
+      setRefresh((current) => current + 1);
+    } catch (placeFailure) {
+      setPlaceError(placeFailure.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const editedPlace = places.find((place) => place.id === editPlaceId) || null;
+
+  const chooseEditPlace = (placeId) => {
+    setEditPlaceId(placeId);
+    setEditPlaceName(places.find((place) => place.id === placeId)?.name || "");
+    setEditPlaceError("");
+    setEditPlaceMessage("");
+  };
+
+  // Shared by rename and delete: both need a reason, refresh the places and
+  // the change history, and report inside the Edit location card.
+  const runPlaceEdit = async (work, success) => {
+    setBusy(true);
+    setEditPlaceError("");
+    setEditPlaceMessage("");
+    try {
+      await work();
+      setEditPlaceReason("");
+      setEditPlaceMessage(success);
+      setAuditPage(1);
+      setRefresh((current) => current + 1);
+    } catch (editFailure) {
+      setEditPlaceError(editFailure.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const renameEditedPlace = (event) => {
+    event.preventDefault();
+    const name = editPlaceName.trim();
+    return runPlaceEdit(async () => {
+      const renamed = await renamePlace({
+        token, placeId: editPlaceId, name, reason: editPlaceReason.trim(),
+      });
+      setEditPlaceName(renamed.name);
+    }, `Location renamed to "${name}".`);
+  };
+
+  const deleteEditedPlace = () => {
+    setConfirmPlaceDelete(false);
+    const name = editedPlace?.name || "Location";
+    return runPlaceEdit(async () => {
+      await deletePlace({ token, placeId: editPlaceId, reason: editPlaceReason.trim() });
+      setEditPlaceId("");
+      setEditPlaceName("");
+    }, `"${name}" deleted.`);
   };
 
   // A chosen file is framed in PhotoCropper before anything is uploaded.
@@ -771,7 +847,9 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
           </form>
         </div>
 
-        <div className="card supplier-admin-aside">
+        {/* Both location cards share the third column. */}
+        <div className="supplier-admin-aside">
+        <div className="card">
           <h3>New location</h3>
           <p className="form-hint">
             A building, or a canteen or shop inside one.
@@ -785,7 +863,11 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
                 value={placeName}
                 disabled={busy}
                 placeholder="e.g. The Deck"
-                onChange={(event) => setPlaceName(event.target.value)}
+                onChange={(event) => {
+                  setPlaceName(event.target.value);
+                  setPlaceError("");
+                  setPlaceMessage("");
+                }}
               />
             </div>
             <div className="form-group">
@@ -805,8 +887,10 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
               </small>
             </div>
             <p className="form-hint">
-              A location cannot be removed once a supplier uses it.
+              A location cannot be deleted while a supplier or another location uses it.
             </p>
+            {placeError && <div className="action-error" role="alert">{placeError}</div>}
+            {placeMessage && <div className="success-message" role="status">{placeMessage}</div>}
             <div className="form-actions">
               <p className="form-hint"><Required /> required</p>
               <button
@@ -818,6 +902,83 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
               </button>
             </div>
           </form>
+        </div>
+
+        <div className="card">
+          <h3>Edit location</h3>
+          <p className="form-hint">
+            Rename a location, or delete one that nothing uses. A location
+            cannot be moved to a different building.
+          </p>
+          <form onSubmit={renameEditedPlace}>
+            <div className="form-group">
+              <label htmlFor="edit-place">Location<Required /></label>
+              <PlaceTreeSelect
+                id="edit-place"
+                places={places}
+                value={editPlaceId}
+                disabled={busy}
+                onChange={chooseEditPlace}
+                ariaLabel="Choose the location to edit"
+              />
+            </div>
+            {editedPlace && (
+              <>
+                <div className="form-group">
+                  <label htmlFor="edit-place-name">New name<Required /></label>
+                  <input
+                    id="edit-place-name"
+                    value={editPlaceName}
+                    disabled={busy}
+                    onChange={(event) => {
+                      setEditPlaceName(event.target.value);
+                      setEditPlaceError("");
+                      setEditPlaceMessage("");
+                    }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="edit-place-reason">Reason for this change<Required /></label>
+                  <input
+                    id="edit-place-reason"
+                    value={editPlaceReason}
+                    disabled={busy}
+                    maxLength={500}
+                    placeholder="e.g. official name changed"
+                    onChange={(event) => setEditPlaceReason(event.target.value)}
+                  />
+                </div>
+              </>
+            )}
+            {editPlaceError && <div className="action-error" role="alert">{editPlaceError}</div>}
+            {editPlaceMessage && (
+              <div className="success-message" role="status">{editPlaceMessage}</div>
+            )}
+            {editedPlace && !editPlaceReason.trim() && (
+              <p className="form-hint">Give a reason to rename or delete this location.</p>
+            )}
+            {editedPlace && (
+              <div className="form-actions">
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  disabled={busy || !editPlaceReason.trim()}
+                  onClick={() => setConfirmPlaceDelete(true)}
+                >
+                  Delete
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={busy || !editPlaceReason.trim() || !editPlaceName.trim()
+                    || editPlaceName.trim() === editedPlace.name}
+                >
+                  Rename
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
         </div>
       </div>
 
@@ -881,6 +1042,16 @@ export default function SupplierAdminSection({ token, onUnsavedChange }) {
             Next
           </button>
         </div>
+      )}
+      {confirmPlaceDelete && editedPlace && (
+        <ConfirmDialog
+          title={`Delete "${editedPlace.name}"?`}
+          message="This removes the location from the list. It only works if no supplier (including ones hidden from browsing) and no other location uses it. The deletion is recorded in the change history."
+          confirmLabel="Delete location"
+          cancelLabel="Keep it"
+          onConfirm={deleteEditedPlace}
+          onCancel={() => setConfirmPlaceDelete(false)}
+        />
       )}
       {discardTarget && (
         <ConfirmDialog

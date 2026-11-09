@@ -514,6 +514,14 @@ body {
   min-height: 0;
 }
 
+/* The New location and Edit location cards stack in the third column. */
+.supplier-admin-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
 .required-marker {
   color: #c0392b;
   font-weight: bold;

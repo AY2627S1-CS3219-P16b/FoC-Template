@@ -35,8 +35,8 @@ Opening hours and operating days are shown on each supplier's card on the
 When you create a request, FoC saves the supplier's name and full pickup
 location, including the building, floor, location description and any pickup
 instructions, with the request. Couriers see this on the order. If the supplier
-changes its details later, your existing request keeps the details from when it
-was created.
+changes its details or its location is renamed later, your existing request
+keeps the details from when it was created.
 
 ## Can I request items from somewhere that isn't listed?
 
@@ -47,4 +47,7 @@ manage the supplier list.
 ## Who manages the supplier list?
 
 Admins create, update and deactivate suppliers, including their photos, opening
-hours and locations. Students can browse suppliers but cannot edit them.
+hours and locations. Admins can also add, rename and delete locations. A
+location can only be deleted when no supplier (including ones hidden from
+browsing) and no other location uses it. Students can browse suppliers but
+cannot edit them.

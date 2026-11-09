@@ -79,6 +79,7 @@ suppliers.append_constraint(CheckConstraint(
 AUDIT_ENTITIES = ("SUPPLIER", "PLACE")
 AUDIT_ACTIONS = (
     "SUPPLIER_CREATED", "SUPPLIER_UPDATED", "SUPPLIER_DEACTIVATED", "PLACE_CREATED",
+    "PLACE_RENAMED", "PLACE_DELETED",
 )
 
 # Who changed what, and why. Written in the same transaction as the change.
@@ -156,6 +157,23 @@ def create_schema(connection) -> None:
                              AND conrelid = '{table}'::regclass) THEN
                 ALTER TABLE {table} ADD CONSTRAINT supplier_operating_days_valid
                     CHECK ({OPERATING_DAYS_CHECK});
+            END IF;
+        END $$;
+    """))
+    # The allowed audit actions grew when places became renamable and
+    # deletable; an older database still has the shorter list, so replace it.
+    # Checking for the newest action makes this a no-op once upgraded.
+    audit = f'"{schema}".supplier_audit_logs' if schema else "supplier_audit_logs"
+    allowed = ", ".join(f"'{action}'" for action in AUDIT_ACTIONS)
+    connection.execute(text(f"""
+        DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint
+                           WHERE conname = 'supplier_audit_action_allowed'
+                             AND conrelid = '{audit}'::regclass
+                             AND position('PLACE_DELETED' in pg_get_constraintdef(oid)) > 0) THEN
+                ALTER TABLE {audit} DROP CONSTRAINT IF EXISTS supplier_audit_action_allowed;
+                ALTER TABLE {audit} ADD CONSTRAINT supplier_audit_action_allowed
+                    CHECK (action_type IN ({allowed}));
             END IF;
         END $$;
     """))
