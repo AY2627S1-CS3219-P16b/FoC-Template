@@ -67,6 +67,22 @@ docker compose up --build -d
 
 Open <http://localhost:5173>.
 
+### API documentation
+
+Each service serves interactive OpenAPI (Swagger) docs while the stack is
+running. Most endpoints need a login token: call `POST /api/v1/users/login` in
+the User API docs, then use **Authorize** with the returned `access_token`.
+
+| Service  | API docs                     |
+| -------- | ---------------------------- |
+| User     | <http://localhost:8000/docs> |
+| Supplier | <http://localhost:8001/docs> |
+| Credit   | <http://localhost:8002/docs> |
+| Order    | <http://localhost:8003/docs> |
+| FAQ      | <http://localhost:8004/docs> |
+
+Contracts between services are described in [service integration](integration.md).
+
 ---
 
 ## Repository Structure
