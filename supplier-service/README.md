@@ -60,6 +60,8 @@ which returns `403` when the caller is known but not an admin.
 | `PATCH /api/v1/suppliers/{id}`  | Change the supplied fields                        | admin    |
 | `DELETE /api/v1/suppliers/{id}` | Hide a supplier from browsing                     | admin    |
 | `POST /api/v1/places`           | Add a place, optionally inside another            | admin    |
+| `PATCH /api/v1/places/{id}`     | Rename a place (its parent cannot change)         | admin    |
+| `DELETE /api/v1/places/{id}`    | Delete a place no supplier or place uses          | admin    |
 | `GET /api/v1/supplier-changes`  | Every recorded change, newest first               | admin    |
 | `POST /api/v1/supplier-images`  | Upload a photo; returns `{ "url": ... }`          | admin    |
 | `GET /api/v1/supplier-images/{file}` | An uploaded photo, for `<img>` tags          | anyone   |
@@ -158,6 +160,14 @@ can sit inside another, and every admin write is recorded in an audit table.
 Square's `parent_id` points at Yusof Ishak House — so a supplier's location can
 be a whole building or a specific venue inside one. A place that suppliers or child places
 reference cannot be deleted.
+
+Places can be created, renamed and deleted, but never moved to a different
+parent. A new place has nothing inside it, and a rename changes only the name,
+so no API call can make a place sit inside itself or its own descendant.
+Deleting checks suppliers (including ones hidden from browsing) and child places first, and
+returns `409` naming what still uses the place. A rename also updates
+`search_key`; existing orders keep the pickup location text they were created
+with.
 
 **`suppliers`**
 

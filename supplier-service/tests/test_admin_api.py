@@ -27,6 +27,7 @@ from app.admin_queries import (
     DuplicateSupplierError,
     InvalidHoursError,
     NoChangeError,
+    PlaceInUseError,
     UnknownPlaceError,
     update_supplier,
 )
@@ -89,6 +90,8 @@ class AdminEndpointTests(unittest.TestCase):
         self.changes = [
             ("patch", f"/api/v1/suppliers/{self.supplier_id}", {"name": "Renamed"}),
             ("delete", f"/api/v1/suppliers/{self.supplier_id}", None),
+            ("patch", f"/api/v1/places/{self.place_id}", {"name": "Renamed Kiosk"}),
+            ("delete", f"/api/v1/places/{self.place_id}", None),
         ]
         # Every admin route, so a new one cannot be added without a rule.
         self.writes = self.creates + self.changes + [
@@ -175,12 +178,19 @@ class AdminEndpointTests(unittest.TestCase):
              f"/api/v1/suppliers/{self.supplier_id}", None, [(NoChangeError, 409)]),
             ("app.main.create_place", "post", "/api/v1/places", {"name": "Test Kiosk"},
              [(UnknownPlaceError, 404), (DuplicatePlaceError, 409)]),
+            ("app.main.rename_place", "patch", f"/api/v1/places/{self.place_id}",
+             {"name": "Renamed Kiosk"},
+             [(DuplicatePlaceError, 409), (NoChangeError, 409),
+              (ValueError("place name must contain letters or numbers"), 422)]),
+            ("app.main.delete_place", "delete", f"/api/v1/places/{self.place_id}", None,
+             [(PlaceInUseError(2, 1), 409)]),
         ]
         for target, method, path, body, outcomes in cases:
             for error, expected in outcomes:
                 with patch(target, side_effect=error):
                     response = self.call(method, path, body, **REASON)
-                self.assertEqual(response.status_code, expected, f"{path} {error.__name__}")
+                name = getattr(error, "__name__", type(error).__name__)
+                self.assertEqual(response.status_code, expected, f"{path} {name}")
 
     def test_missing_supplier_returns_not_found(self):
         for target, method, body in (("app.main.update_supplier", "patch", {"name": "X"}),
@@ -189,6 +199,42 @@ class AdminEndpointTests(unittest.TestCase):
                 response = self.call(method, f"/api/v1/suppliers/{self.supplier_id}",
                                      body, **REASON)
             self.assertEqual(response.status_code, 404)
+
+    def test_missing_place_returns_not_found(self):
+        for target, method, body in (("app.main.rename_place", "patch", {"name": "X"}),
+                                     ("app.main.delete_place", "delete", None)):
+            with patch(target, return_value=None):
+                response = self.call(method, f"/api/v1/places/{self.place_id}",
+                                     body, **REASON)
+            self.assertEqual(response.status_code, 404)
+            self.assertEqual(response.json()["detail"], "Place not found.")
+
+    def test_place_in_use_explains_what_blocks_the_delete(self):
+        with patch("app.main.delete_place", side_effect=PlaceInUseError(3, 1)):
+            response = self.call("delete", f"/api/v1/places/{self.place_id}", None, **REASON)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(
+            response.json()["detail"],
+            "This location still has 3 suppliers (including ones hidden from browsing) and "
+            "1 location inside it. Move or remove them first.",
+        )
+
+    def test_rename_cannot_move_a_place(self):
+        # Only the name may change: a parent_id is refused, not silently dropped,
+        # so the API cannot be used to build a cycle.
+        for body in ({"name": "X", "parent_id": str(uuid4())}, {"name": "   "}, {}):
+            response = self.call("patch", f"/api/v1/places/{self.place_id}", body, **REASON)
+            self.assertEqual(response.status_code, 422, body)
+        self.engine.begin.assert_not_called()
+
+        row = {"id": self.place_id, "name": "Renamed Kiosk", "search_key": "renamedkiosk",
+               "parent_id": None, "parent_name": None}
+        with patch("app.main.rename_place", return_value=row) as rename:
+            response = self.call("patch", f"/api/v1/places/{self.place_id}",
+                                 {"name": "  Renamed Kiosk  "}, **REASON)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(rename.call_args.kwargs["name"], "Renamed Kiosk")
+        self.assertEqual(rename.call_args.kwargs["reason"], REASON["X-Admin-Reason"])
 
     def test_invalid_input_is_refused_before_the_database(self):
         cases = [

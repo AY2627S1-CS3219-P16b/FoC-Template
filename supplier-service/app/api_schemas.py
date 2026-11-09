@@ -3,7 +3,7 @@
 from datetime import datetime, time
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .classification import normalize_tags, validate_supplier_type
 from .hours import CAMPUS_TIMEZONE, check_hours, closes_at, is_open, normalize_days
@@ -221,6 +221,26 @@ class PlaceCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=200)
     parent_id: UUID | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, value: str) -> str:
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("name must not be blank")
+        return stripped
+
+
+class PlaceRename(BaseModel):
+    """A new name for an existing place.
+
+    Unknown fields are refused, so a request that tries to move the place
+    (parent_id) fails instead of being silently ignored.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=200)
 
     @field_validator("name")
     @classmethod

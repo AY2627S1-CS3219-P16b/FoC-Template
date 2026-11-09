@@ -11,17 +11,21 @@ from .admin_queries import (
     DuplicateSupplierError,
     InvalidHoursError,
     NoChangeError,
+    PlaceInUseError,
     UnknownPlaceError,
     count_audit_logs,
     create_place,
     create_supplier,
     deactivate_supplier,
+    delete_place,
     list_audit_logs,
+    rename_place,
     update_supplier,
 )
 from .api_schemas import (
     AuditLogPage,
     PlaceCreate,
+    PlaceRename,
     PlaceResponse,
     SupplierCreate,
     SupplierPage,
@@ -243,6 +247,49 @@ def create_app() -> FastAPI:
             except ValueError as error:
                 # A name with no letters or digits has no usable search key.
                 raise HTTPException(422, str(error)) from error
+        return PlaceResponse(**row)
+
+    @app.patch("/api/v1/places/{place_id}", response_model=PlaceResponse)
+    def edit_place(place_id: UUID, request: Request, body: PlaceRename,
+                   admin: CurrentUser = Depends(require_admin),
+                   reason: str = Depends(admin_reason)):
+        """Rename a place. Its parent cannot change, so no cycle can form."""
+        with request.app.state.database.begin() as connection:
+            try:
+                row = rename_place(
+                    connection, actor_id=UUID(admin.id), place_id=place_id,
+                    name=body.name, reason=reason,
+                )
+            except DuplicatePlaceError as error:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT,
+                    "A place with an equivalent name already exists.",
+                ) from error
+            except NoChangeError as error:
+                raise HTTPException(
+                    status.HTTP_409_CONFLICT, "The location already has that name."
+                ) from error
+            except ValueError as error:
+                raise HTTPException(422, str(error)) from error
+        if row is None:
+            raise HTTPException(404, "Place not found.")
+        return PlaceResponse(**row)
+
+    @app.delete("/api/v1/places/{place_id}", response_model=PlaceResponse)
+    def remove_place(place_id: UUID, request: Request,
+                     admin: CurrentUser = Depends(require_admin),
+                     reason: str = Depends(admin_reason)):
+        """Delete a place that no supplier or other place uses."""
+        with request.app.state.database.begin() as connection:
+            try:
+                row = delete_place(
+                    connection, actor_id=UUID(admin.id), place_id=place_id,
+                    reason=reason,
+                )
+            except PlaceInUseError as error:
+                raise HTTPException(status.HTTP_409_CONFLICT, str(error)) from error
+        if row is None:
+            raise HTTPException(404, "Place not found.")
         return PlaceResponse(**row)
 
     @app.post("/api/v1/supplier-images", status_code=status.HTTP_201_CREATED)

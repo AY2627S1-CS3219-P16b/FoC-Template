@@ -29,6 +29,24 @@ class UnknownPlaceError(Exception):
     """The referenced place does not exist."""
 
 
+class PlaceInUseError(Exception):
+    """The place still holds suppliers or other places, so it cannot be deleted."""
+
+    def __init__(self, supplier_count: int, child_count: int):
+        self.supplier_count = supplier_count
+        self.child_count = child_count
+        parts = []
+        if supplier_count:
+            parts.append(f"{supplier_count} supplier{'s' if supplier_count != 1 else ''}"
+                         " (including ones hidden from browsing)")
+        if child_count:
+            parts.append(f"{child_count} location{'s' if child_count != 1 else ''} inside it")
+        super().__init__(
+            f"This location still has {' and '.join(parts) or 'records using it'}. "
+            "Move or remove them first."
+        )
+
+
 class InvalidHoursError(ValueError):
     """The opening and closing times, once applied, would never be open."""
 
@@ -202,13 +220,101 @@ def create_place(connection, *, actor_id: UUID, name: str,
                    "search_key": search_key},
         reason=reason,
     )
+    return _place_response(connection, place_id)
+
+
+def _place_response(connection, place_id) -> dict:
     row = connection.execute(
         select(places.c.id, places.c.name, places.c.search_key, places.c.parent_id)
         .where(places.c.id == place_id)
     ).mappings().one()
     parent_name = None
-    if parent_id is not None:
+    if row["parent_id"] is not None:
         parent_name = connection.scalar(
-            select(places.c.name).where(places.c.id == parent_id)
+            select(places.c.name).where(places.c.id == row["parent_id"])
         )
     return {**dict(row), "parent_name": parent_name}
+
+
+def _lock_place(connection, place_id):
+    """The place row, locked so a concurrent rename, delete or new supplier waits."""
+    return connection.execute(
+        select(places.c.id, places.c.name, places.c.search_key, places.c.parent_id)
+        .where(places.c.id == place_id)
+        .with_for_update()
+    ).mappings().one_or_none()
+
+
+def rename_place(connection, *, actor_id: UUID, place_id: UUID, name: str,
+                 reason: str) -> dict | None:
+    """Rename a place, or return None if it does not exist.
+
+    Only the name changes, never the parent, so a rename cannot create a cycle.
+    The search key follows the new name, so the duplicate check stays the same
+    as when creating a place. Orders keep the pickup location they were created
+    with, so a rename does not rewrite order history.
+    """
+    current = _lock_place(connection, place_id)
+    if current is None:
+        return None
+    search_key = normalize_place_name(name)
+    if name == current["name"]:
+        raise NoChangeError
+    if connection.scalar(
+        select(places.c.id).where(places.c.search_key == search_key,
+                                  places.c.id != place_id)
+    ) is not None:
+        raise DuplicatePlaceError
+    try:
+        connection.execute(
+            update(places).where(places.c.id == place_id)
+            .values(name=name, search_key=search_key)
+        )
+    except IntegrityError as error:
+        raise DuplicatePlaceError from error
+    _record(
+        connection, actor_id=actor_id, entity_type="PLACE", entity_id=place_id,
+        action_type="PLACE_RENAMED",
+        previous_value={"name": current["name"], "search_key": current["search_key"]},
+        new_value={"name": name, "search_key": search_key},
+        reason=reason,
+    )
+    return _place_response(connection, place_id)
+
+
+def delete_place(connection, *, actor_id: UUID, place_id: UUID,
+                 reason: str) -> dict | None:
+    """Delete an unused place, or return None if it does not exist.
+
+    A place is only deleted when no supplier (including ones hidden from
+    browsing) and no other place points at it. The row lock makes a supplier
+    being added to the
+    place at the same moment wait, then fail its foreign key, rather than
+    slip in between the check and the delete.
+    """
+    current = _lock_place(connection, place_id)
+    if current is None:
+        return None
+    supplier_count = connection.scalar(
+        select(func.count()).select_from(suppliers).where(suppliers.c.place_id == place_id)
+    )
+    child_count = connection.scalar(
+        select(func.count()).select_from(places).where(places.c.parent_id == place_id)
+    )
+    if supplier_count or child_count:
+        raise PlaceInUseError(supplier_count, child_count)
+    response = _place_response(connection, place_id)
+    try:
+        connection.execute(places.delete().where(places.c.id == place_id))
+    except IntegrityError as error:
+        raise PlaceInUseError(0, 0) from error
+    _record(
+        connection, actor_id=actor_id, entity_type="PLACE", entity_id=place_id,
+        action_type="PLACE_DELETED",
+        previous_value={"id": place_id, "name": current["name"],
+                        "parent_id": current["parent_id"],
+                        "search_key": current["search_key"]},
+        new_value={},
+        reason=reason,
+    )
+    return response

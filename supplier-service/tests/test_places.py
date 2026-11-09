@@ -9,9 +9,13 @@ from uuid import uuid4
 from sqlalchemy import delete, func, insert, select, text, update
 from sqlalchemy.exc import IntegrityError
 
+from app.admin_queries import (
+    DuplicatePlaceError, NoChangeError, PlaceInUseError, create_place, delete_place,
+    rename_place,
+)
 from app.places import canonical_place_records, normalize_place_name
 from app.database import create_database_engine
-from app.schema import places, suppliers
+from app.schema import create_schema, places, supplier_audit_logs, suppliers
 from app.seed import DEFAULT_CSV, read_suppliers, seed
 
 # Data rows in the seed CSV, counted independently of read_suppliers.
@@ -195,6 +199,127 @@ class PlaceDatabaseTests(unittest.TestCase):
             row = connection.execute(select(suppliers).where(suppliers.c.id == records[0]["id"])).mappings().one()
             self.assertEqual(row["name"], "Edited supplier")
             self.assertFalse(row["is_active"])
+
+
+@unittest.skipUnless(os.getenv("RUN_POSTGRES_TESTS") == "1", "Set RUN_POSTGRES_TESTS=1 for PostgreSQL checks")
+class PlaceAdminDatabaseTests(unittest.TestCase):
+    """Rename and delete against PostgreSQL, in a throwaway schema."""
+
+    def setUp(self):
+        self.engine = create_database_engine()
+        self.schema = "supplier_test_" + uuid4().hex
+        with self.engine.begin() as connection:
+            connection.execute(text(f'CREATE SCHEMA "{self.schema}"'))
+        self.db = self.engine.execution_options(schema_translate_map={None: self.schema})
+        with self.db.begin() as connection:
+            create_schema(connection)
+        self.admin = uuid4()
+
+    def tearDown(self):
+        try:
+            with self.engine.begin() as connection:
+                connection.execute(text(f'DROP SCHEMA "{self.schema}" CASCADE'))
+        finally:
+            self.engine.dispose()
+
+    def add(self, name, parent_id=None):
+        with self.db.begin() as connection:
+            return create_place(connection, actor_id=self.admin, name=name,
+                                parent_id=parent_id)["id"]
+
+    def audit(self, place_id):
+        with self.db.connect() as connection:
+            return connection.execute(
+                select(supplier_audit_logs.c.action_type, supplier_audit_logs.c.previous_value,
+                       supplier_audit_logs.c.new_value, supplier_audit_logs.c.reason)
+                .where(supplier_audit_logs.c.entity_id == place_id)
+                .order_by(supplier_audit_logs.c.created_at)
+            ).all()
+
+    def test_rename_updates_name_and_key_and_is_audited(self):
+        com3 = self.add("COM3")
+        terrace = self.add("Terrace", com3)
+        with self.db.begin() as connection:
+            row = rename_place(connection, actor_id=self.admin, place_id=terrace,
+                               name="The Terrace", reason="official name")
+        self.assertEqual((row["name"], row["search_key"], row["parent_id"], row["parent_name"]),
+                         ("The Terrace", "theterrace", com3, "COM3"))
+        action, previous, new, reason = self.audit(terrace)[-1]
+        self.assertEqual(action, "PLACE_RENAMED")
+        self.assertEqual(previous["name"], "Terrace")
+        self.assertEqual(new["name"], "The Terrace")
+        self.assertEqual(reason, "official name")
+        # A different spelling of the same name is still a change worth recording.
+        with self.db.begin() as connection:
+            rename_place(connection, actor_id=self.admin, place_id=terrace,
+                         name="the terrace", reason="lower case")
+
+    def test_rename_refuses_duplicates_unchanged_names_and_missing_places(self):
+        self.add("COM2")
+        com3 = self.add("COM3")
+        for name, error in (("COM 2", DuplicatePlaceError), ("COM3", NoChangeError),
+                            ("!!!", ValueError)):
+            with self.assertRaises(error, msg=name):
+                with self.db.begin() as connection:
+                    rename_place(connection, actor_id=self.admin, place_id=com3,
+                                 name=name, reason="test")
+        with self.db.begin() as connection:
+            self.assertIsNone(rename_place(connection, actor_id=self.admin,
+                                           place_id=uuid4(), name="X", reason="test"))
+        self.assertEqual([row[0] for row in self.audit(com3)], ["PLACE_CREATED"])
+
+    def test_delete_only_removes_unused_places(self):
+        com3 = self.add("COM3")
+        terrace = self.add("The Terrace", com3)
+        with self.db.begin() as connection:
+            connection.execute(insert(suppliers).values(
+                name="Hidden stall", supplier_type="FOOD_BEVERAGE", place_id=terrace,
+                is_active=False, **HOURS,
+            ))
+        # COM3 has a location inside it; The Terrace has a (hidden) supplier.
+        for place_id, counts in ((com3, (0, 1)), (terrace, (1, 0))):
+            with self.assertRaises(PlaceInUseError) as caught:
+                with self.db.begin() as connection:
+                    delete_place(connection, actor_id=self.admin, place_id=place_id,
+                                 reason="test")
+            self.assertEqual((caught.exception.supplier_count,
+                              caught.exception.child_count), counts)
+
+        with self.db.begin() as connection:
+            connection.execute(delete(suppliers))
+            row = delete_place(connection, actor_id=self.admin, place_id=terrace,
+                               reason="closed down")
+            self.assertEqual(row["name"], "The Terrace")
+            row = delete_place(connection, actor_id=self.admin, place_id=com3,
+                               reason="test cleanup")
+            self.assertIsNone(delete_place(connection, actor_id=self.admin,
+                                           place_id=com3, reason="again"))
+        with self.db.connect() as connection:
+            self.assertEqual(connection.scalar(select(func.count()).select_from(places)), 0)
+        action, previous, new, reason = self.audit(terrace)[-1]
+        self.assertEqual((action, previous["name"], previous["parent_id"], new, reason),
+                         ("PLACE_DELETED", "The Terrace", str(com3), {}, "closed down"))
+        # The name is free again once the place is gone.
+        self.add("The Terrace")
+
+    def test_older_audit_constraint_is_upgraded(self):
+        # A database created before rename/delete existed only allowed the
+        # original actions; starting the service must widen the list.
+        table = f'"{self.schema}".supplier_audit_logs'
+        with self.engine.begin() as connection:
+            connection.execute(text(f"""
+                ALTER TABLE {table} DROP CONSTRAINT supplier_audit_action_allowed;
+                ALTER TABLE {table} ADD CONSTRAINT supplier_audit_action_allowed CHECK
+                    (action_type IN ('SUPPLIER_CREATED', 'SUPPLIER_UPDATED',
+                                     'SUPPLIER_DEACTIVATED', 'PLACE_CREATED'));
+            """))
+        with self.db.begin() as connection:
+            create_schema(connection)
+            create_schema(connection)  # A second start is a no-op.
+        place_id = self.add("Kiosk")
+        with self.db.begin() as connection:
+            delete_place(connection, actor_id=self.admin, place_id=place_id, reason="test")
+        self.assertEqual(self.audit(place_id)[-1][0], "PLACE_DELETED")
 
 
 if __name__ == "__main__":
