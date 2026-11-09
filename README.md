@@ -12,19 +12,19 @@ withdrawn, or exchanged for money, and only circulate within the platform.
 
 ## Team Contributions
 
-| Team member | Main contributions | Nice-to-have (N2H) contributions |
-| --- | --- | --- |
-| Chong Yi Jie | Supplier Service; refined frontend UI; supplier seed data | RAG-based FAQ support |
-| Jessica Ange Xu | User Service; built initial frontend | None |
-| Aurora Yufei Shi | Order Service; Credit Service | None |
+| Team member      | Main contributions                                        | Nice-to-have (N2H) contributions |
+| ---------------- | --------------------------------------------------------- | -------------------------------- |
+| Chong Yi Jie     | Supplier Service; refined frontend UI; supplier seed data | RAG-based FAQ support            |
+| Jessica Ange Xu  | User Service; built initial frontend                      | None                             |
+| Aurora Yufei Shi | Order Service; Credit Service                             | None                             |
 
 Shared: each member containerised their own service and implemented its
 sync/async integrations.
 
 The FAQ assistant helps users find answers about accounts, suppliers, errands,
 and credits without leaving the app. It retrieves relevant passages from our
-support documentation and uses them to answer questions, with links to the
-sources. Yi Jie built this feature.
+support documentation and uses them to answer questions, and shows the FAQ
+answers it used. Yi Jie built this feature.
 
 ---
 
@@ -44,7 +44,8 @@ Services communicate over HTTP and never read each other's tables.
 
 Two background workers deliver credit operations asynchronously through a
 transactional outbox: `user-credit-worker` (initial credits on registration) and
-`order-worker` (reserve, release and transfer credits; order expiry).
+`order-worker` (reserve, release and transfer credits; order expiry;
+auto-confirming receipt).
 
 See [service integration](integration.md) for request flows.
 The Help panel is available before and after login. See [FAQ setup](faq-service/README.md)
@@ -98,4 +99,4 @@ edit this README.
 
 The team remains responsible for checking the suggestions and understanding the
 submitted code. Recorded prompts, key responses, and verification notes are in
-our [AI usage log](ai/usage-log.md). 
+our [AI usage log](ai/usage-log.md).
