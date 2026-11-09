@@ -45,15 +45,16 @@ and see the same message.
 
 ## How long do I stay logged in?
 
-Your login session lasts 15 minutes. After that you need to log in again.
-
-<!-- REVIEW: The code uses 15-minute access tokens with no refresh token. The
-backlog (N1.2, F1.3.1) plans 30-minute access tokens plus 7-day refresh tokens
-that logout invalidates. Update this answer if refresh tokens are added. -->
+You stay logged in for up to 7 days on the same browser, as long as you do not
+log out. FoC renews your session in the background, so you do not need to log
+in again while you use the app. After 7 days, or if an admin suspends or
+disables your account, you are returned to the login screen with the message
+"Your session has expired. Please log in again."
 
 ## How do I log out?
 
-Click "Log out" in the top navigation bar.
+Click "Log out" in the top navigation bar. This ends your session on that
+browser; your other logged-in browsers stay logged in.
 
 ## What are Requester Mode and Courier Mode?
 

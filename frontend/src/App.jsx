@@ -28,6 +28,14 @@ import {
   updateUserRoleMode,
   updateUserProfile,
 } from "./api/users";
+import {
+  SESSION_EXPIRED_MESSAGE,
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  logoutSession,
+  saveSession,
+} from "./api/session";
 
 function goToScreen(screen) {
   window.location.href = `?screen=${screen}`;
@@ -44,22 +52,22 @@ function tokenPayload(token) {
 }
 
 function getStoredAccessToken() {
-  const token = localStorage.getItem("foc_access_token");
+  const token = getAccessToken();
   if (!token) return null;
 
   try {
     const payload = tokenPayload(token);
 
-    if (!payload.exp || payload.exp * 1000 <= Date.now()) {
-      localStorage.removeItem("foc_access_token");
-      localStorage.removeItem("foc_user");
+    // An expired access token is kept while a refresh token can renew it:
+    // the first request gets a 401, refreshes and retries (api/client.js).
+    if ((!payload.exp || payload.exp * 1000 <= Date.now()) && !getRefreshToken()) {
+      clearSession();
       return null;
     }
 
     return token;
   } catch {
-    localStorage.removeItem("foc_access_token");
-    localStorage.removeItem("foc_user");
+    clearSession();
     return null;
   }
 }
@@ -229,6 +237,9 @@ function AuthScreen({ registration }) {
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const [actionError, setActionError] = useState("");
+  const [sessionExpired] = useState(
+    () => !registration && new URLSearchParams(window.location.search).get("reason") === "expired",
+  );
   const [registered, setRegistered] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -253,8 +264,7 @@ function AuthScreen({ registration }) {
           email: form.email,
           password: form.password,
         });
-        localStorage.setItem("foc_access_token", session.access_token);
-        localStorage.setItem("foc_user", JSON.stringify(session.user));
+        saveSession(session);
         goToScreen(
           session.user.active_role_mode === "COURIER"
             ? "courier-orders"
@@ -304,6 +314,9 @@ function AuthScreen({ registration }) {
               ? "Create an account with your NUS email."
               : "Sign in to Friend on Campus."}
           </p>
+          {sessionExpired && !actionError && (
+            <div className="action-error" role="status">{SESSION_EXPIRED_MESSAGE}</div>
+          )}
           <form onSubmit={handleSubmit} noValidate>
             <SimpleField
               label="NUS email"
@@ -490,9 +503,8 @@ function formatLedgerEntry(entry) {
 export default function App() {
   const accessToken = getStoredAccessToken();
 
-  const handleLogout = () => {
-    localStorage.removeItem("foc_access_token");
-    localStorage.removeItem("foc_user");
+  const handleLogout = async () => {
+    await logoutSession();
     window.location.href = window.location.pathname;
   };
 

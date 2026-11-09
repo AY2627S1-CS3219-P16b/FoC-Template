@@ -14,6 +14,15 @@ private JWT key. Other APIs verify its tokens locally with the public key.
 Role switching returns a fresh `access_token` alongside the updated user profile;
 the frontend replaces its token so Order Service sees the new role immediately.
 
+Login returns a 15-minute access token (JWT) and a 7-day refresh token (an
+opaque random string; User Service stores only its SHA-256 hash).
+`POST /api/v1/users/refresh` exchanges a refresh token for a new pair and
+revokes the old one (rotation); it re-reads the user's role and status, so
+admin changes reach the other services at the next refresh (within 15 minutes).
+`POST /api/v1/users/logout` revokes the refresh token. Suspending or disabling
+an account revokes all its refresh tokens. The frontend refreshes on a 401 and
+retries once; if that fails it returns to the login screen.
+
 ## Registration and initial credits
 
 User Service commits the user and registration event in one transaction.

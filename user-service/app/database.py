@@ -100,6 +100,17 @@ credit_outbox = Table(
     Column("next_attempt_at", String, nullable=True),
 )
 
+# Refresh tokens are opaque random strings; only their SHA-256 hash is stored.
+refresh_tokens = Table(
+    "refresh_tokens", metadata,
+    Column("id", String, primary_key=True),
+    Column("user_id", String, ForeignKey("users.id"), nullable=False, index=True),
+    Column("token_hash", String, nullable=False, unique=True, index=True),
+    Column("created_at", String, nullable=False),
+    Column("expires_at", String, nullable=False),
+    Column("revoked_at", String, nullable=True),
+)
+
 profile_columns = (
     users.c.id,
     users.c.email,
@@ -370,6 +381,8 @@ class Database:
                 update(users).where(users.c.id == target_id)
                 .values(account_status=account_status)
             )
+            if account_status != "ACTIVE":
+                self._revoke_user_refresh_tokens(connection, target_id)
             self._record_admin_change(
                 connection, actor_id, target_id, "ACCOUNT_STATUS_CHANGED",
                 {"account_status": previous_status},
@@ -429,6 +442,76 @@ class Database:
                 if bootstrap and candidate and bootstrap.user_id == candidate.id:
                     return BootstrapResult(self._profile(connection, candidate.id), False)
             raise BootstrapUnavailableError from error
+
+    def create_refresh_token(
+        self, user_id: str, token_hash: str, expires_at: datetime
+    ) -> None:
+        with self.engine.begin() as connection:
+            self._insert_refresh_token(connection, user_id, token_hash, expires_at)
+
+    def _insert_refresh_token(
+        self, connection: Connection, user_id: str, token_hash: str, expires_at: datetime
+    ) -> None:
+        connection.execute(refresh_tokens.insert().values(
+            id=str(uuid4()),
+            user_id=user_id,
+            token_hash=token_hash,
+            created_at=datetime.now(timezone.utc).isoformat(),
+            expires_at=expires_at.isoformat(),
+        ))
+
+    def rotate_refresh_token(
+        self, token_hash: str, new_token_hash: str, new_expires_at: datetime
+    ) -> dict[str, object] | None:
+        """Revoke a valid refresh token and store its replacement.
+
+        Returns the owner's profile, or None when the token is unknown,
+        expired, already used or revoked, or the owner is no longer ACTIVE.
+        """
+        now = datetime.now(timezone.utc)
+        with self.engine.begin() as connection:
+            row = connection.execute(
+                select(refresh_tokens.c.id, refresh_tokens.c.user_id, refresh_tokens.c.expires_at)
+                .where(
+                    refresh_tokens.c.token_hash == token_hash,
+                    refresh_tokens.c.revoked_at.is_(None),
+                )
+            ).one_or_none()
+            if not row or datetime.fromisoformat(row.expires_at) <= now:
+                return None
+            # The revoked_at guard makes concurrent use of one token succeed once.
+            result = connection.execute(
+                update(refresh_tokens)
+                .where(refresh_tokens.c.id == row.id, refresh_tokens.c.revoked_at.is_(None))
+                .values(revoked_at=now.isoformat())
+            )
+            if result.rowcount != 1:
+                return None
+            user = connection.execute(
+                select(*profile_columns).where(users.c.id == row.user_id)
+            ).one_or_none()
+            if not user or user.account_status != "ACTIVE":
+                return None
+            self._insert_refresh_token(connection, row.user_id, new_token_hash, new_expires_at)
+        return dict(user._mapping)
+
+    def revoke_refresh_token(self, token_hash: str) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(
+                update(refresh_tokens)
+                .where(
+                    refresh_tokens.c.token_hash == token_hash,
+                    refresh_tokens.c.revoked_at.is_(None),
+                )
+                .values(revoked_at=datetime.now(timezone.utc).isoformat())
+            )
+
+    def _revoke_user_refresh_tokens(self, connection: Connection, user_id: str) -> None:
+        connection.execute(
+            update(refresh_tokens)
+            .where(refresh_tokens.c.user_id == user_id, refresh_tokens.c.revoked_at.is_(None))
+            .values(revoked_at=datetime.now(timezone.utc).isoformat())
+        )
 
     def update_account_status(self, email: str, account_status: str) -> None:
         with self.engine.begin() as connection:

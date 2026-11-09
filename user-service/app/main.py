@@ -1,3 +1,4 @@
+import hashlib
 import os
 import secrets
 from contextlib import asynccontextmanager
@@ -14,7 +15,7 @@ from cryptography.hazmat.primitives.serialization import (
 from fastapi import Body, FastAPI, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from pydantic import ValidationError
 
 from .database import Database, DuplicateEmailError
@@ -31,6 +32,7 @@ from .api_schemas import (
     LoginRequest,
     LoginResponse,
     ProfileUpdateRequest,
+    RefreshTokenRequest,
     RegistrationRequest,
     RoleModeUpdateRequest,
     RoleModeResponse,
@@ -38,7 +40,15 @@ from .api_schemas import (
 )
 
 
-ACCESS_TOKEN_TTL_SECONDS = 15 * 60  # 15 min sessions
+# Backlog N1.2: access tokens expire within 30 minutes, refresh tokens within 7 days.
+ACCESS_TOKEN_TTL_SECONDS = 15 * 60
+REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60
+SESSION_EXPIRED_MESSAGE = "Your session has expired. Please log in again."
+
+
+def _hash_refresh_token(token: str) -> str:
+    # Refresh tokens are 256-bit random values, so a fast hash is sufficient.
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def _key_material(explicit_value: str | None, value_name: str, path_name: str) -> bytes:
@@ -209,6 +219,26 @@ def create_app(
             "exp": issued_at + timedelta(seconds=ACCESS_TOKEN_TTL_SECONDS),
         }, signing_key, algorithm="RS256")
 
+    def refresh_token_expiry() -> datetime:
+        return datetime.now(timezone.utc) + timedelta(seconds=REFRESH_TOKEN_TTL_SECONDS)
+
+    def session_response(user: dict[str, object], refresh_token: str) -> dict[str, object]:
+        return {
+            "access_token": issue_access_token(user),
+            "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_TTL_SECONDS,
+            "refresh_token": refresh_token,
+            "refresh_expires_in": REFRESH_TOKEN_TTL_SECONDS,
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "display_name": user["display_name"],
+                "auth_role": user["auth_role"],
+                "active_role_mode": user["active_role_mode"],
+                "account_status": user["account_status"],
+            },
+        }
+
     @app.post(
         "/api/v1/users/login",
         response_model=LoginResponse,
@@ -243,19 +273,64 @@ def create_app(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        return {
-            "access_token": issue_access_token(user),
-            "token_type": "bearer",
-            "expires_in": ACCESS_TOKEN_TTL_SECONDS,
-            "user": {
-                "id": user["id"],
-                "email": user["email"],
-                "display_name": user["display_name"],
-                "auth_role": user["auth_role"],
-                "active_role_mode": user["active_role_mode"],
-                "account_status": user["account_status"],
-            },
-        }
+        refresh_token = secrets.token_urlsafe(32)
+        database.create_refresh_token(
+            user["id"], _hash_refresh_token(refresh_token), refresh_token_expiry()
+        )
+        return session_response(user, refresh_token)
+
+    @app.post(
+        "/api/v1/users/refresh",
+        response_model=LoginResponse,
+        openapi_extra={
+            "requestBody": {
+                "content": {"application/json": {"schema": RefreshTokenRequest.model_json_schema()}},
+                "required": True,
+            }
+        },
+    )
+    def refresh(body: dict[str, object] = Body(...)) -> dict[str, object]:
+        """Exchange a refresh token for a new access token and a new refresh token.
+
+        Each refresh token works once (rotation). The user's current role and
+        status are read from the database, so admin changes apply here.
+        """
+        try:
+            refresh_request = RefreshTokenRequest.model_validate(body)
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from error
+        new_refresh_token = secrets.token_urlsafe(32)
+        user = database.rotate_refresh_token(
+            _hash_refresh_token(refresh_request.refresh_token),
+            _hash_refresh_token(new_refresh_token),
+            refresh_token_expiry(),
+        )
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=SESSION_EXPIRED_MESSAGE,
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return session_response(user, new_refresh_token)
+
+    @app.post(
+        "/api/v1/users/logout",
+        status_code=status.HTTP_204_NO_CONTENT,
+        openapi_extra={
+            "requestBody": {
+                "content": {"application/json": {"schema": RefreshTokenRequest.model_json_schema()}},
+                "required": True,
+            }
+        },
+    )
+    def logout(body: dict[str, object] = Body(...)) -> Response:
+        """Revoke the refresh token (F1.3.1). Unknown or used tokens are ignored."""
+        try:
+            logout_request = RefreshTokenRequest.model_validate(body)
+        except ValidationError as error:
+            raise RequestValidationError(error.errors()) from error
+        database.revoke_refresh_token(_hash_refresh_token(logout_request.refresh_token))
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     def authenticated_user(request: Request) -> dict[str, object]:
         authorization = request.headers.get("Authorization", "")

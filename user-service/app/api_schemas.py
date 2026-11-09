@@ -118,7 +118,20 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: Literal["bearer"] = "bearer"
     expires_in: int
+    refresh_token: str
+    refresh_expires_in: int
     user: AuthenticatedUserResponse
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+    @field_validator("refresh_token")
+    @classmethod
+    def validate_refresh_token(cls, value: str) -> str:
+        if not value or len(value) > 200:
+            raise ValueError("must be a refresh token")
+        return value
 
 
 class ProfileUpdateRequest(BaseModel):
