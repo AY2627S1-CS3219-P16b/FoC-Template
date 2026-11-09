@@ -12,9 +12,6 @@ used to pay the store for your items.
 Every new account receives 20 credits. They are added automatically shortly
 after you register.
 
-<!-- REVIEW: 20 comes from INITIAL_CREDITS in compose.yaml. Update this answer
-if the team changes the value. -->
-
 ## I just registered. Why don't I see my credits yet?
 
 Your starting credits are added in the background a moment after registration,

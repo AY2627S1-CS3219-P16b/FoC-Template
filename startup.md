@@ -21,7 +21,7 @@ Skip if `.env` and `user-service/keys/` already exist.
 
    ```bash
    [ -e .env ] && echo ".env already exists; keep it" || bash -c '
-   for k in USER_SERVICE_KEY ORDER_SERVICE_KEY USER_DB_PASSWORD SUPPLIER_DB_PASSWORD CREDIT_DB_PASSWORD ORDER_DB_PASSWORD FAQ_DB_PASSWORD; do
+   for k in USER_SERVICE_KEY ORDER_SERVICE_KEY ORDER_CONTACT_SERVICE_KEY USER_DB_PASSWORD SUPPLIER_DB_PASSWORD CREDIT_DB_PASSWORD ORDER_DB_PASSWORD FAQ_DB_PASSWORD; do
      echo "$k=$(openssl rand -hex 32)"
    done' > .env
    ```
