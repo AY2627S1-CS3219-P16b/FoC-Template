@@ -2,10 +2,10 @@
 
 | Service | Owns | Integration |
 | --- | --- | --- |
-| User (`8000`) | Accounts, roles, JWT signing | Registration outbox delivers initial-credit events to Credit Service |
+| User (`8000`) | Accounts, roles, JWT signing | Registration outbox delivers initial-credit events to Credit Service; internal contact lookup for Order Service with `ORDER_CONTACT_SERVICE_KEY` |
 | Supplier (`8001`) | Catalogue, campus locations, opening hours | Order Service fetches supplier details using the caller's JWT |
 | Credit (`8002`) | Available/reserved balances, reservations, immutable ledger | Accepts order mutations only with `ORDER_SERVICE_KEY` |
-| Order (`8003`) | Errands, assignments, history, credit jobs | Worker reserves/releases/transfers credits and expires unaccepted orders |
+| Order (`8003`) | Errands, assignments, history, credit jobs | Worker reserves/releases/transfers credits, expires unaccepted orders and auto-confirms delivered ones |
 | FAQ (`8004`) | FAQ chunks, local embeddings, support request metadata | Public Help panel; calls Anthropic directly with retrieved FAQ evidence |
 
 Each service has its own PostgreSQL database. Services use HTTP contracts and
@@ -73,6 +73,24 @@ credit commit can therefore recover without spending or paying twice. Pending
 jobs persist, use bounded exponential backoff, and remain visible for operator
 attention if credentials or data need fixing.
 
+## Order safeguards
+
+Couriers may hold only one `ACCEPTED`/`PICKED_UP` order, enforced by a partial
+unique index. An assigned courier can return an `ACCEPTED` errand to `OPEN`
+without changing its original acceptance deadline or reserved credit.
+
+Order participants may read each other's display name and preferred contact via
+`GET /api/v1/orders/{id}/contact` only during `ACCEPTED`/`PICKED_UP`/`DELIVERED`.
+Order Service uses the separate `ORDER_CONTACT_SERVICE_KEY` for User Service's
+internal lookup; it cannot use this key to change credit balances.
+
+After `CREDIT_JOB_MAX_ATTEMPTS` failures (default 10), the credit job stops with
+`failed_at` and the order exposes `credit_error`. Admins resolve the cause and
+retry from the dashboard; replay keeps the original idempotency key and
+reconciles Credit Service first. Apply
+`order-service/migrations/001_review_fixes.sql` before upgrading an existing
+Order database.
+
 ## Frontend and containers
 
 The frontend calls only user-authorized routes and reads balances/ledger directly
@@ -109,18 +127,3 @@ HTML comments and the authoring README are excluded from indexing. Startup
 indexes changed documents; later changes can be indexed explicitly without a
 restart. Missing/stale indexes and provider failures produce a temporary-support
 message without blocking the core application. See [FAQ setup](faq-service/README.md).
-
-Couriers may hold only one ACCEPTED/PICKED_UP order, enforced by a partial
-unique index. An assigned courier can return an ACCEPTED errand to OPEN without
-changing its original acceptance deadline or reserved credit.
-
-Order participants may read each other's display name and preferred contact via
-GET /orders/{id}/contact only during ACCEPTED/PICKED_UP/DELIVERED. Order Service
-uses the separate ORDER_CONTACT_SERVICE_KEY for User Service's internal lookup;
-it cannot use this key to change credit balances.
-
-After CREDIT_JOB_MAX_ATTEMPTS failures (default 10), the credit job stops with
-failed_at and the order exposes credit_error. Admins resolve the cause and retry
-from the dashboard; replay keeps the original idempotency key and reconciles
-Credit Service first. Apply order-service/migrations/001_review_fixes.sql before
-upgrading an existing Order database.

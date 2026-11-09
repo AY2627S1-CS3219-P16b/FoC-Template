@@ -7,9 +7,19 @@ Run commands from the repository root unless a step says otherwise.
 
 Requires Docker Desktop running and ports 5173 and 8000–8004 free.
 
-Existing installations: add a new `FAQ_DB_PASSWORD` to the root `.env` without
-regenerating any existing secrets. Add `ANTHROPIC_API_KEY` to enable FAQ answers;
-embeddings run locally and need no AWS credentials. See [FAQ setup](faq-service/README.md).
+Existing installations: add any key from `.env.example` that your root `.env`
+is missing (for example `FAQ_DB_PASSWORD` or `ORDER_CONTACT_SERVICE_KEY`) without
+regenerating existing secrets:
+
+```bash
+echo "ORDER_CONTACT_SERVICE_KEY=$(openssl rand -hex 32)" >> .env
+```
+
+An Order database created before the review fixes also needs
+`order-service/migrations/001_review_fixes.sql` once; see the
+[Order Service README](order-service/README.md#review-fixes-and-existing-databases).
+Add `ANTHROPIC_API_KEY` to enable FAQ answers; embeddings run locally and need
+no AWS credentials. See [FAQ setup](faq-service/README.md).
 
 ### First-time setup (once per machine)
 
@@ -89,8 +99,10 @@ docker compose -f compose.yaml -f compose.dev.yaml up -d
 
 Use the same `-f` flags with `ps`, `stop` and `down`.
 
-The sections below cover running the services on the host, with Docker
-providing only the databases through the development override.
+The sections below cover running User Service, Supplier Service and the
+frontend on the host, with Docker providing the databases through the
+development override. Run Credit, Order and FAQ with Docker as above, or see
+their own READMEs.
 
 ## Prerequisites
 
@@ -207,7 +219,7 @@ python -m app.seed
 For a fresh database, expect:
 
 ```text
-Loaded 54 CSV rows; inserted 54; suppliers in database: 54
+Loaded 70 CSV rows; inserted 70; suppliers in database: 70
 ```
 
 Run the import for a fresh database; it is not needed on every startup.
@@ -242,9 +254,10 @@ Open <http://localhost:5173>. Register at
 <http://localhost:5173/?screen=register>, then log in at
 <http://localhost:5173/?screen=login>.
 
-Vite forwards supplier, place, and supplier-audit requests to Supplier Service
-on port 8001, credit requests to port 8002, order requests to port 8003, and other
-`/api` requests to User Service on port 8000.
+Vite forwards supplier, place, supplier-audit and supplier-image requests to
+Supplier Service on port 8001, credit requests to port 8002, order requests to
+port 8003, FAQ requests to port 8004, and other `/api` requests to User Service
+on port 8000.
 For a remotely hosted User Service, set `VITE_USER_API_URL` to its origin before
 starting or building the frontend.
 
