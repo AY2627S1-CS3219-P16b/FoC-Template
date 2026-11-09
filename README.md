@@ -122,6 +122,7 @@ These were made and written by the team.
 - Documentation: updating FAQ answers, README, setup guide and integration guide,
   and checking them against the code (Claude Code).
 - Presentation slides: checking slide facts against the code (Claude Code).
+- Implementing features the team specified, with the team reviewing and testing the code (Codex, Claude Code).
 
 **Verification:** All AI outputs were reviewed, edited and tested by the authors.
 Automated tests were run for every code change; see each log entry for details.
