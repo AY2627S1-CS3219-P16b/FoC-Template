@@ -108,11 +108,22 @@ microservice lives in its own top-level folder with its own Dockerfile.
 
 ## AI Use Summary
 
-We used AI tools, including OpenAI Codex, to help review teammates' pull requests,
-fix syntax errors, review TDD and implementation plans, and write boilerplate
-code. Codex also helped review the implementation against the project brief and
-edit this README.
+**Tools:** OpenAI Codex, Claude Code (Claude Opus 5.5), ChatGPT
 
-The team remains responsible for checking the suggestions and understanding the
-submitted code. Recorded prompts, key responses, and verification notes are in
-our [AI usage log](ai/usage-log.md).
+**Prohibited phases avoided:** requirements elicitation and prioritisation;
+architecture and design decisions; decision rationales and trade-off analyses.
+These were made and written by the team.
+
+**Used for:**
+
+- Reviewing teammates' pull requests, fixing syntax errors, reviewing TDD and
+  implementation plans, and writing boilerplate (Codex).
+- FAQ evaluation: scripts comparing retrieval depth, and measurements at different top-k values and thresholds. The team chose k = 5 and the 0.60 threshold from these results (Claude Code).
+- Documentation: updating FAQ answers, README, setup guide and integration guide,
+  and checking them against the code (Claude Code).
+- Presentation slides: checking slide facts against the code (Claude Code).
+
+**Verification:** All AI outputs were reviewed, edited and tested by the authors.
+Automated tests were run for every code change; see each log entry for details.
+
+**Prompts and key exchanges:** see the [AI usage log](ai/usage-log.md).
