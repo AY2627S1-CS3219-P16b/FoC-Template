@@ -36,7 +36,7 @@ class Settings:
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", "").strip(),
             anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-haiku-5-5"),
             anthropic_timeout=float(os.getenv("FAQ_ANTHROPIC_TIMEOUT", "25")),
-            min_similarity=float(os.getenv("FAQ_MIN_SIMILARITY", "0.65")),
+            min_similarity=float(os.getenv("FAQ_MIN_SIMILARITY", "0.60")),
             requests_per_minute=int(os.getenv("FAQ_REQUESTS_PER_MINUTE", "30")),
             max_concurrent_requests=int(os.getenv("FAQ_MAX_CONCURRENT_REQUESTS", "2")),
         )
