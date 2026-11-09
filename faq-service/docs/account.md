@@ -17,17 +17,16 @@ cannot access these details through orders.
 ## What does my account status mean?
 
 An active account can use FoC normally. Admins can suspend or disable an
-account; suspended or disabled accounts cannot log in.
-
-<!-- REVIEW: Confirm the difference between SUSPENDED and DISABLED, and whether
-there is an appeal or reinstatement process (N1 user-management idea). -->
+account. Both have the same effect: you cannot log in or use FoC, and logging in
+shows "This account has been suspended." or "This account has been disabled."
+If it happens while you are logged in, you are returned to the login screen
+within 15 minutes.
 
 ## I think my account was suspended by mistake. What should I do?
 
-Contact a FoC admin and explain the situation. Admins can review account changes
-and reinstate accounts.
-
-<!-- REVIEW: Add the real contact channel for admins. -->
+FoC does not yet have an in-app way to contact an admin or appeal a
+suspension. Admins can reinstate an account by changing its status back to
+active. An account review and reinstatement process is planned as future work.
 
 ## What can admins do?
 
@@ -45,6 +44,3 @@ once by the team that runs FoC.
 ## Can I delete my account?
 
 No. FoC does not support deleting accounts.
-
-<!-- REVIEW: Deletion is not planned. Once an admin contact channel exists, add:
-"If you no longer want to use FoC, ask an admin to disable your account." -->

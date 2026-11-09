@@ -1,6 +1,6 @@
 # FAQ retrieval evaluation
 
-Run: 2026-11-08 inside the FAQ service Docker image, with 65 FAQ entries and
+Run: 2026-11-09 inside the FAQ service Docker image, with 65 FAQ entries and
 `FAQ_MIN_SIMILARITY=0.65`. The test set in `evaluation/questions.json` has 100
 questions:
 
@@ -16,20 +16,20 @@ top k and passes the threshold, which is what the API sends to Claude.
 
 | k | Expected entry in top k | Retrieved (all) | Clear | Vague | Avg chunks sent to Claude | Unrelated rejected by threshold |
 |---|---|---|---|---|---|---|
-| 1 | 56 / 85 | 49 / 85 | 41 / 71 | 8 / 14 | 0.85 | 13 / 15 |
-| 2 | 70 / 85 | 61 / 85 | 52 / 71 | 9 / 14 | 1.58 | 13 / 15 |
-| 3 | 77 / 85 | 67 / 85 | 58 / 71 | 9 / 14 | 2.19 | 13 / 15 |
-| 4 | 79 / 85 | 68 / 85 | 59 / 71 | 9 / 14 | 2.69 | 13 / 15 |
-| 5 (current) | 81 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 3.14 | 13 / 15 |
-| 8 | 82 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 4.29 | 13 / 15 |
+| 1 | 57 / 85 | 50 / 85 | 42 / 71 | 8 / 14 | 0.85 | 13 / 15 |
+| 2 | 70 / 85 | 61 / 85 | 52 / 71 | 9 / 14 | 1.56 | 13 / 15 |
+| 3 | 78 / 85 | 67 / 85 | 58 / 71 | 9 / 14 | 2.15 | 13 / 15 |
+| 4 | 79 / 85 | 68 / 85 | 59 / 71 | 9 / 14 | 2.66 | 13 / 15 |
+| 5 (current) | 81 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 3.09 | 13 / 15 |
+| 8 | 82 / 85 | 70 / 85 | 61 / 71 | 9 / 14 | 4.25 | 13 / 15 |
 
-Mean reciprocal rank of the expected entry: 0.783.
+Mean reciprocal rank of the expected entry: 0.790.
 
-- Of the 70 expected entries that pass the threshold, 49 rank 1st, 11 rank 2nd,
-  7 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
+- Of the 70 expected entries that pass the threshold, 50 rank 1st, 11 rank 2nd,
+  6 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
 - 15 supported questions miss because their expected entry scores below 0.65,
   whatever k is. Vague wording is the main cause: 5 of the 14 vague questions miss
-  this way ("cancel" 0.619, "balance" 0.579, "profile" 0.507), compared with 10 of
+  this way ("cancel" 0.615, "balance" 0.579, "profile" 0.512), compared with 10 of
   the 71 clear ones.
 - Two unrelated questions pass the threshold by matching "How do I create an
   account?": "How do I reset my NUSNET password?" (0.727) and "How do I apply for a
