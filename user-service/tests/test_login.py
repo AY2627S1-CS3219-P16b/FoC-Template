@@ -81,8 +81,16 @@ def test_unknown_email_and_wrong_password_return_same_error(tmp_path, email, pas
     assert response.json() == {"detail": "Invalid email or password."}
 
 
-@pytest.mark.parametrize("account_status", ["SUSPENDED", "DISABLED"])
-def test_non_active_accounts_cannot_login(tmp_path, account_status):
+@pytest.mark.parametrize(
+    "account_status,message",
+    [
+        ("SUSPENDED", "This account has been suspended."),
+        ("DISABLED", "This account has been disabled."),
+    ],
+)
+def test_non_active_accounts_cannot_login_and_are_told_why(
+    tmp_path, account_status, message
+):
     client, app = make_client(tmp_path)
     with client:
         register(client)
@@ -92,6 +100,26 @@ def test_non_active_accounts_cannot_login(tmp_path, account_status):
         response = client.post(
             "/api/v1/users/login",
             json={"email": "e0123456@u.nus.edu", "password": PASSWORD},
+        )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": message}
+    assert "access_token" not in response.json()
+
+
+@pytest.mark.parametrize("account_status", ["SUSPENDED", "DISABLED"])
+def test_non_active_account_with_wrong_password_gets_generic_error(
+    tmp_path, account_status
+):
+    client, app = make_client(tmp_path)
+    with client:
+        register(client)
+        app.state.database.update_account_status(
+            "e0123456@u.nus.edu", account_status
+        )
+        response = client.post(
+            "/api/v1/users/login",
+            json={"email": "e0123456@u.nus.edu", "password": "Incorrect1!"},
         )
 
     assert response.status_code == 401

@@ -266,11 +266,18 @@ def create_app(
         ):
             password_matches = False
 
-        if not user or not password_matches or user["account_status"] != "ACTIVE":
+        if not user or not password_matches:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password.",
                 headers={"WWW-Authenticate": "Bearer"},
+            )
+        # Only revealed after a correct password, so it does not expose which
+        # emails are registered.
+        if user["account_status"] != "ACTIVE":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"This account has been {user['account_status'].lower()}.",
             )
 
         refresh_token = secrets.token_urlsafe(32)
