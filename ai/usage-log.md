@@ -1,5 +1,43 @@
 # AI usage log
 
+## Presentation slides
+
+- Tools: ChatGPT (formatting team-written content in Google Slides); Claude Code
+  (checking slide facts against the code).
+- Prompts: "check all the slides that are created if they
+  are all accurate against our implementation";
+- Human review: the team wrote the slide content; Chong Yi Jie checked the AI’s fact-check notes against the code before editing.
+
+## 2026-11-10 to 2026-11-11 — Frontend fixes found while rehearsing the demo
+
+- Tool: Claude Code (Claude Opus 5.5).
+- Mode: debugging and implementation of fixes for problems found by Chong Yi Jie.
+- Prompts: "the error for duplicate suppliers isnt showed on the screen, only error
+  in api on network tab, fix it";
+- Changes: location errors shown inside the New location card; order contact box
+  labelled "Your courier"/"Your requester" with a link; items label and delivery
+  note on order cards; Profile warning when no contact method would be shared;
+  audit logs no longer trap scrolling; request form resets per supplier and allows
+  submitting while the balance is unavailable (commits `d4b4265`, `8847a00`,
+  `c8c3d4b`, part of `939a920`).
+- Verification: frontend tests (46 passed) and build; containers rebuilt.
+- Human review: Chong Yi Jie found each problem while testing the app, then checked every fix in the browser.
+
+## 2026-11-09 to 2026-11-10 — Documentation checked against the code
+
+- Tool: Claude Code (Claude Opus 5.5).
+- Mode: documentation review and rewriting.
+- Prompts: "check if integration.md is accurate"; "ensure startup md, readme (first
+  page readme) and the evaluation for faq is accurate"; "update other services readme
+  to, make sure its accurate, document the api, error handling".
+- Changes: `startup.md` (missing `ORDER_CONTACT_SERVICE_KEY`, Anthropic key step),
+  root README (API documentation table), `integration.md`, and README rewrites for
+  the User, Credit, Order, FAQ and Supplier services (commits `5e1ee51`,
+  `0a5a3af`, `f93ac08`).
+- Verification: followed `startup.md` on a clean copy of the repository and ran a
+  full errand end to end; documented test commands run for each service.
+- Human review: Chong Yi Jie read the updated documents and checked the setup steps and API descriptions against the app.
+
 ## 2026-11-09 — FAQ threshold measured at 0.65, 0.60 and 0.55; changed to 0.60
 
 - Tool: Claude Code (Claude Opus 5.5).
