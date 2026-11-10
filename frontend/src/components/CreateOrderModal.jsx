@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { formatPlace } from '../api/suppliers';
 import {
   DEFAULT_DEADLINE,
@@ -12,6 +12,7 @@ export default function CreateOrderModal({
   onClose,
   supplier,
   availableCredits,
+  balanceUnknown = false,
   onSubmitOrder
 }) {
   const [items, setItems] = useState('');
@@ -20,6 +21,16 @@ export default function CreateOrderModal({
   const [deadline, setDeadline] = useState(DEFAULT_DEADLINE);
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Each opening, and each different supplier, starts with an empty form.
+  useEffect(() => {
+    if (!isOpen) return;
+    setItems('');
+    setDeliveryLocation('');
+    setInstructions('');
+    setDeadline(DEFAULT_DEADLINE);
+    setErrorMsg('');
+  }, [isOpen, supplier?.id]);
 
   if (!isOpen || !supplier) return null;
 
@@ -43,7 +54,9 @@ export default function CreateOrderModal({
       return;
     }
 
-    if (availableCredits < 1) {
+    // When the balance could not be loaded, Order Service still decides: the
+    // request waits until the credit is reserved, or is rejected if too low.
+    if (!balanceUnknown && availableCredits < 1) {
       setErrorMsg('Insufficient credit balance (Requires 1 credit).');
       return;
     }
@@ -149,7 +162,9 @@ export default function CreateOrderModal({
           </div>
 
           <div className="notice-box">
-            Credit Reservation: 1 Credit will be held from available balance ({availableCredits} available).
+            {balanceUnknown
+              ? 'Credit Reservation: 1 Credit will be held once your balance can be checked. Your balance is temporarily unavailable.'
+              : `Credit Reservation: 1 Credit will be held from available balance (${availableCredits} available).`}
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>

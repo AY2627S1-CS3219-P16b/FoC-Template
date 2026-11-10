@@ -12,7 +12,7 @@ before(async () => {
   // Attach Vite's optional HMR transport to an unlistened server: rendering
   // tests need no network socket or browser server.
   server = await createServer({ configFile: false, plugins: [react()], logLevel: "error", server: { middlewareMode: true, hmr: { server: createHttpServer() }, watch: null }, appType: "custom", optimizeDeps: { noDiscovery: true } });
-  for (const name of ["OrderCard", "OrderActionButton", "CourierOrdersSection", "RequesterOrdersSection", "CourierActiveSection", "Navbar"]) {
+  for (const name of ["CreateOrderModal", "OrderCard", "OrderActionButton", "CourierOrdersSection", "RequesterOrdersSection", "CourierActiveSection", "Navbar"]) {
     const module = await server.ssrLoadModule("/src/components/" + name + ".jsx");
     components[name] = name === "RequesterOrdersSection" ? module.RequesterOrdersView : module.default;
   }
@@ -185,4 +185,13 @@ test("delivery note sits under Deliver to, and details use the known name", () =
   assert.doesNotMatch(html, /<dt>Delivery instructions<\/dt>/);
   const accepted = { ...order, status: "ACCEPTED", contact: { display_name: "Alex Tan", contact_preference: null, contact: null } };
   assert.match(render("OrderCard", { order: accepted, helpRole: "courier" }), /<dt>Requester<\/dt><dd>Alex Tan<\/dd>/);
+});
+
+test("create form does not claim 0 credits when the balance could not be loaded", () => {
+  const supplier = { id: "s1", name: "Cheers", place: { name: "Yusof Ishak House" }, floor: null, closes_at: null };
+  const props = { isOpen: true, onClose: noop, supplier, availableCredits: 0, onSubmitOrder: noop };
+  assert.match(render("CreateOrderModal", props), /\(0 available\)/);
+  const unknown = render("CreateOrderModal", { ...props, balanceUnknown: true });
+  assert.match(unknown, /balance is temporarily unavailable/);
+  assert.doesNotMatch(unknown, /0 available/);
 });

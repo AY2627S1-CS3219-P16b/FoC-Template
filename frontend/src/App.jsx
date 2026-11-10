@@ -667,6 +667,8 @@ export default function App() {
   const [availableCredits, setAvailableCredits] = useState(0);
   const [reservedCredits, setReservedCredits] = useState(0);
   const [creditError, setCreditError] = useState("");
+  // False until the first balance loads, so an unknown balance is not shown as 0.
+  const [creditsLoaded, setCreditsLoaded] = useState(false);
 
   // Modal State
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(
@@ -723,6 +725,7 @@ export default function App() {
     setTransactions(ledger.items.map(formatLedgerEntry));
     setTransactionCount(ledger.total);
     setCreditError("");
+    setCreditsLoaded(true);
     return balance;
   }, [accessToken]);
 
@@ -846,6 +849,7 @@ export default function App() {
           onClose={() => setIsOrderModalOpen(false)}
           supplier={selectedSupplierForOrder}
           availableCredits={availableCredits}
+          balanceUnknown={!creditsLoaded || Boolean(creditError)}
           onSubmitOrder={handleCreateOrder}
         />
       </>
@@ -1020,6 +1024,7 @@ export default function App() {
         onClose={() => setIsOrderModalOpen(false)}
         supplier={selectedSupplierForOrder}
         availableCredits={availableCredits}
+        balanceUnknown={!creditsLoaded || Boolean(creditError)}
         onSubmitOrder={handleCreateOrder}
       />
     </div>
