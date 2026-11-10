@@ -1,6 +1,6 @@
 # FAQ retrieval evaluation
 
-Run: 2026-11-09 inside the FAQ service Docker image, with 65 FAQ entries and
+Run: 2026-11-11 inside the FAQ service Docker image, with 65 FAQ entries and
 `FAQ_MIN_SIMILARITY=0.60`. The test set in `evaluation/questions.json` has 100
 questions:
 
@@ -16,19 +16,19 @@ top k and passes the threshold, which is what the API sends to Claude.
 
 | k | Expected entry in top k | Retrieved (all) | Clear | Vague | Avg chunks sent to Claude | Unrelated rejected by threshold |
 |---|---|---|---|---|---|---|
-| 1 | 57 / 85 | 56 / 85 | 46 / 71 | 10 / 14 | 0.95 | 11 / 15 |
-| 2 | 70 / 85 | 67 / 85 | 56 / 71 | 11 / 14 | 1.81 | 11 / 15 |
+| 1 | 57 / 85 | 56 / 85 | 47 / 71 | 9 / 14 | 0.95 | 11 / 15 |
+| 2 | 71 / 85 | 68 / 85 | 57 / 71 | 11 / 14 | 1.81 | 11 / 15 |
 | 3 | 78 / 85 | 74 / 85 | 62 / 71 | 12 / 14 | 2.61 | 11 / 15 |
 | 4 | 79 / 85 | 75 / 85 | 63 / 71 | 12 / 14 | 3.35 | 11 / 15 |
 | 5 (current) | 81 / 85 | 77 / 85 | 65 / 71 | 12 / 14 | 4.07 | 11 / 15 |
 | 8 | 82 / 85 | 77 / 85 | 65 / 71 | 12 / 14 | 5.99 | 11 / 15 |
 
-Mean reciprocal rank of the expected entry: 0.790.
+Mean reciprocal rank of the expected entry: 0.792.
 
-- Of the 77 expected entries that are retrieved, 56 rank 1st, 11 rank 2nd,
-  7 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
+- Of the 77 expected entries that are retrieved, 56 rank 1st, 12 rank 2nd,
+  6 rank 3rd, 1 ranks 4th and 2 rank 5th. Recall stops improving at k = 5.
 - 8 supported questions miss at k = 5. Six score below 0.60 whatever k is
-  ("balance" 0.579, "profile" 0.507, "who are u" 0.541, "When does the canteen
+  ("balance" 0.579, "profile" 0.504, "who are u" 0.541, "When does the canteen
   close?" 0.538); the other two have an expected entry above the threshold but
   ranked below 5th.
 - Four unrelated questions pass the threshold: "How do I reset my NUSNET

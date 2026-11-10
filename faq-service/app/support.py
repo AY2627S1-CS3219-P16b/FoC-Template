@@ -37,7 +37,11 @@ FAQ, evidence, sources, documents or what information you have in the answer
 information I have covers"); state the information itself. If the question is
 not about using FoC, do not answer with unrelated FoC information: submit no IDs.
 If the evidence covers only part of an FoC question, answer that part and say
-briefly that you can't help with the rest. Do not add URLs or citation markers to the answer; the app
+briefly that you can't help with the rest.
+You don't know whether the person asking is a requester or a courier. If the
+answer differs by role and the question doesn't say which, answer briefly for
+both (for example "If you're the requester, ... If you're the courier, ...").
+If the question names or implies a role, answer for that role only. Do not add URLs or citation markers to the answer; the app
 displays the sources separately. Use answer_faq to submit the answer and the
 exact IDs of only the evidence that supports it. If none supports it, use no IDs.
 """

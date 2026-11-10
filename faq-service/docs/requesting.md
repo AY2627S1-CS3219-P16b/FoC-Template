@@ -8,13 +8,22 @@ location (both required), optional delivery instructions, and an acceptance
 deadline, then submit. 1 credit is reserved as the courier's reward, and you can
 track the request under "My Requests".
 
-## Do I need to pay for the items?
+## Who pays for the items?
 
-Yes, before you create the request. FoC errands are collect-only: the courier
-picks up and delivers your items but never pays for them. Make sure your items
-are already paid for (for example, a prepaid order or online print payment) or
-need no payment, such as collecting a parcel, and mention this in the item
-description. Credits are only the courier's reward, not payment for the items.
+It depends on your role:
+
+- **Requester:** you pay the store before you create the request. Use a prepaid
+  order or online payment, or an item that needs no payment (such as a parcel),
+  and mention it in the item description.
+- **Courier:** you never pay for the items. You only collect and deliver them.
+
+Credits are only the courier's reward for the errand, not payment for the items.
+
+## Can I get items from more than one supplier in one request?
+
+No. Each request is for one supplier, so the courier makes a single pickup. To
+get items from two places, create a separate request for each supplier; each
+one reserves its own reward credit.
 
 ## What acceptance deadlines can I choose?
 

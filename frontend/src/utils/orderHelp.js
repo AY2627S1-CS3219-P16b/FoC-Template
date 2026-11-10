@@ -20,7 +20,7 @@ const Q = {
   rejected: "Why was my request rejected?",
   steps: "What are the steps after I accept an errand?",
   courierCancel: "Can I cancel an errand after accepting it?",
-  payItems: "Do I pay for the items?",
+  payItems: "Who pays for the items?",
   requesterContact: "Can I see the requester's contact details?",
   getPaid: "When do I get paid for an errand?",
   earn: "How many credits do I earn per errand?",
