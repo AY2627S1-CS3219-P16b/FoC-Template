@@ -640,11 +640,11 @@ body {
   font-size: 12px;
 }
 
-/* A fixed-height window onto the log, so it scrolls instead of growing. */
+/* A fixed-height window onto the log, so it scrolls instead of growing.
+   Scrolling past either end continues with the page, so it never traps the wheel. */
 .audit-scroll {
   max-height: 520px;
   overflow-y: auto;
-  overscroll-behavior: contain;
   padding-right: 6px;
   margin-bottom: 12px;
   border-top: 1px solid #e5e7eb;
