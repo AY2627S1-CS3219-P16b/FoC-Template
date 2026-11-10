@@ -1,191 +1,140 @@
 # Order Service
 
-Owns errands, courier assignments, acceptance deadlines, order history, and
-durable credit actions. User Service owns authentication; Supplier Service owns
-supplier availability and pickup details; Credit Service owns all balances.
+Owns errands, courier assignments, acceptance deadlines, order history and the
+credit jobs sent to Credit Service. How orders move credits is in the
+[integration guide](../integration.md); setup is in the
+[startup guide](../startup.md).
 
 ## API
 
-Swagger: <http://localhost:8003/docs>. All order endpoints require a User Service
-JWT. `/health` is public and checks PostgreSQL connectivity.
+Swagger: <http://localhost:8003/docs>
 
-| Method | Path | Purpose |
-| --- | --- | --- |
-| POST | `/api/v1/orders` | Create a request pending credit reservation |
-| GET | `/api/v1/orders` | Browse visible orders; status defaults to `OPEN` |
-| GET | `/api/v1/orders/me?role=requester` | My requests; `role=courier` lists my assignments |
-| GET | `/api/v1/orders/{order_id}` | Current order details |
-| POST | `/api/v1/orders/{order_id}/accept` | Assign the calling courier |
-| POST | `/api/v1/orders/{order_id}/unassign` | Assigned courier returns an ACCEPTED errand to OPEN |
-| GET | `/api/v1/orders/{order_id}/contact` | Active participants read the other party's name and preferred contact |
-| POST | `/api/v1/orders/{order_id}/retry-credit` | Admin requeues a failed credit job after resolving its cause |
-| POST | `/api/v1/orders/{order_id}/pickup` | Assigned courier marks collection |
-| POST | `/api/v1/orders/{order_id}/deliver` | Assigned courier marks delivery |
-| POST | `/api/v1/orders/{order_id}/confirm` | Requester confirms receipt; queue payment |
-| POST | `/api/v1/orders/{order_id}/cancel` | Requester cancels an open order; queue release |
-| GET | `/api/v1/orders/{order_id}/history` | Participants read chronological history |
-| GET | `/health` | Application and database readiness |
+**Authentication.** Every route except `/health` needs a User Service access
+token (`Authorization: Bearer <token>`), verified locally with the public key;
+the token's `account_status` must be `ACTIVE`. The caller's ID and role mode
+come from the token, never from the request body.
 
-Creation requires `Idempotency-Key` (1–200 characters) and this JSON body:
+| Method | Path | Who | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/v1/orders` | requester mode | Create an order; returns 202 while credits are reserved |
+| GET | `/api/v1/orders` | any user | Browse orders (`status` defaults to `OPEN`; filters `supplier_id`, `page`, `page_size` ≤ 100) |
+| GET | `/api/v1/orders/me` | any user | Own orders: `role=requester` or `courier`, `view=active`, `past` or `all`, optional `status` |
+| GET | `/api/v1/orders/admin` | admin | All orders; filters `requester_user_id`, `status` |
+| GET | `/api/v1/orders/{order_id}` | requester, assigned courier; anyone for an unexpired `OPEN` order | Order details |
+| GET | `/api/v1/orders/{order_id}/history` | requester, assigned courier | Chronological history |
+| POST | `/api/v1/orders/{order_id}/accept` | courier mode, not the requester | Take an `OPEN` order before its deadline |
+| POST | `/api/v1/orders/{order_id}/unassign` | assigned courier | Give back an `ACCEPTED` errand; it returns to `OPEN` with the same deadline |
+| POST | `/api/v1/orders/{order_id}/pickup` | assigned courier | `ACCEPTED` → `PICKED_UP` |
+| POST | `/api/v1/orders/{order_id}/deliver` | assigned courier | `PICKED_UP` → `DELIVERED` |
+| POST | `/api/v1/orders/{order_id}/confirm` | requester | Confirm receipt of a `DELIVERED` order; returns 202 while credits transfer |
+| POST | `/api/v1/orders/{order_id}/cancel` | requester | Cancel an unassigned `OPEN` order; returns 202 while credits are released |
+| GET | `/api/v1/orders/{order_id}/contact` | requester, assigned courier | The other party's name and preferred contact, while `ACCEPTED`, `PICKED_UP` or `DELIVERED` |
+| POST | `/api/v1/orders/{order_id}/retry-credit` | admin | Retry a credit job that stopped after too many failures |
+| GET | `/health` | anyone | Checks the database |
+
+**Creating an order.** Send an `Idempotency-Key` header (1–200 characters) and:
 
 ```json
 {
-  "supplier_id": "00000000-0000-4000-8000-000000000001",
+  "supplier_id": "<supplier UUID>",
   "item_description": "One coffee",
   "delivery_location": "COM2 lobby",
   "delivery_instructions": "Message when you arrive",
-  "credit_amount": 3,
-  "expires_at": "2030-01-01T18:00:00+08:00"
+  "credit_amount": 1,
+  "expires_at": "2026-11-10T18:30:00+08:00"
 }
 ```
 
-Use an actual supplier ID and an acceptance deadline in the next 60 minutes
-(5 minutes' allowance for device clocks). When the supplier closes, the
-deadline must also be at least 10 minutes before its `closes_at` from Supplier
-Service, so a courier who accepts at the last moment can still reach the store;
-otherwise creation returns 422. Accepting needs no supplier call, because every
-deadline already ends before closing. The requester ID
-comes from the JWT; supplier name and pickup details come from Supplier Service.
-Inactive or closed suppliers cannot receive new requests. Supplier edits do not
-rewrite existing orders. Identical creation retries return the original order;
-reusing a key with changed client fields returns 409.
+- `expires_at` is the acceptance deadline. It must be in the future and at most
+  60 minutes away. If the supplier has a closing time, the deadline must be at
+  least 10 minutes before it.
+- The supplier must be active and open; its name and pickup details are copied
+  into the order.
+- Repeating the request with the same key returns the original order. Reusing
+  the key with different details returns 409.
 
-Creation and pending cancel/confirm actions return 202. Poll order details until
-the pending state resolves. Lists support `page` and `page_size` (maximum 100);
-order lists also support `status`, and browsing supports `supplier_id`.
-My requests/assignments also support `view=active|past|all` (default `all`).
-Past includes `COMPLETED`, `CANCELLED`, `EXPIRED`, and `REJECTED`; credit
-processing and other unfinished states remain active. Filters apply before
-pagination, and `status` can further narrow a view.
-Unexpired open orders are visible to authenticated users. Other orders and
-history are limited to their requester and assigned courier.
-
-Errors: 401 for invalid credentials, 403 for unauthorized actions, 404 for missing
-orders, 409 for lifecycle/idempotency conflicts, 422 for invalid input, 502 for
-invalid upstream responses, and 503 for unavailable dependencies. Token account
-status is verified locally and reflects the token's claims until it expires.
-
-## Lifecycle and recovery
+**Statuses**
 
 ```text
 RESERVING → OPEN → ACCEPTED → PICKED_UP → DELIVERED → COMPLETING → COMPLETED
-              ↘ CANCELLING → CANCELLED
-              ↘ EXPIRING → EXPIRED
-RESERVING → REJECTED  (insufficient credits)
+   │          │  ↖────────┘ give back (before pickup)
+   │          ├→ CANCELLING → CANCELLED   (requester cancels)
+   │          └→ EXPIRING   → EXPIRED     (deadline passes)
+   └→ REJECTED                            (not enough credits)
 ```
 
-Only the requester can cancel or confirm; requesters cannot accept their own
-orders. Courier mode is required for acceptance. Assigned couriers can continue
-their existing assignment after switching mode. Retries of successful actions
-return the current order without regressing state or duplicating history.
+The `-ING` states wait for Credit Service to confirm. `DELIVERED` becomes
+`COMPLETING` when the requester confirms, or automatically after `AUTO_CONFIRM_RECEIPT_HOURS` (24 by default). A
+courier can hold only one `ACCEPTED` or `PICKED_UP` order at a time.
 
-Each mutation writes its order change, history and any credit job in one database
-transaction. Row locks serialize acceptance against cancellation and expiry.
-Expiry applies only to unassigned `OPEN` orders; the deadline is for acceptance,
-not for finishing a delivery. A delayed reservation that succeeds after its
-deadline moves straight to `EXPIRING` and queues release without publishing open.
+## Errors
 
-`python -m app.worker` runs the independent expiry/credit worker. Due jobs are
-claimed with order row locks and `SKIP LOCKED`, one per transaction. The worker
-checks Credit Service's reservation before each action, verifies the order,
-requester, amount and recipient, and uses a stable key per order/operation.
-Timeouts and crashes after a remote commit are reconciled on the next attempt.
-Only acknowledged credit movements finalize order states. Missing credit
-accounts are retried while registration allocation catches up. Only a definitive
-insufficient-funds response rejects a reservation. Other failures retry up to
-`CREDIT_JOB_MAX_ATTEMPTS` (default 10), including 4xx responses because account
-allocation and configuration can recover. Exhausted jobs set `failed_at` and
-`orders.credit_error`, write a FAILED history entry, and stop retrying. The order
-keeps its pending state so an admin can correct the cause and use Retry credit
-job in the dashboard. Retry resets attempts but preserves the job and remote
-idempotency key, reconciling any previous remote commit before sending again.
+Errors use `{"detail": "..."}`.
 
-Retries use exponential backoff capped at 256 seconds. Inspect `credit_jobs`
-(`attempts`, `last_error_code`, `next_attempt_at`, `completed_at`) and worker logs
-for failures. Pending jobs are retained through restarts. Logs identify jobs and
-error types/statuses without printing service credentials.
+| Status | When |
+| --- | --- |
+| 401 | Missing, invalid or expired token, or an inactive account ("Please log in with an active account.") |
+| 403 | Wrong role mode ("Switch to requester mode…" / "Switch to courier mode…"); not the requester or assigned courier; requester accepting their own order; non-admin on admin routes; Supplier Service refused the lookup |
+| 404 | Order or supplier not found |
+| 409 | The order is in the wrong state for this action (e.g. "Order must be DELIVERED to move to COMPLETING."); the deadline has passed; the courier already has an active errand ("Finish your current errand before accepting another one."); supplier inactive or closed; idempotency key reused with different details; no failed credit job to retry |
+| 422 | Invalid body or parameters, including a deadline more than 60 minutes away or too close to closing time |
+| 502 | Supplier or User Service returned an invalid response |
+| 503 | Database, Supplier Service or User Service unavailable |
 
-## Containers and local setup
+## Data model
 
-See [startup guide](../startup.md). Compose starts `order-db`, `order-service` and
-`order-worker`. The API runs as a non-root user on port 8003; PostgreSQL
-persists in `order-db-data` and is reachable only on the private `order-data`
-network, or on host port 5436 with the development override. The worker needs
-no JWT key. Only the API receives User Service's read-only public key.
+| Table | Columns | Notes |
+| --- | --- | --- |
+| `orders` | `id`, `requester_user_id`, `courier_user_id`, `supplier_id`, `supplier_name`, `pickup_location`, `item_description`, `delivery_location`, `delivery_instructions`, `credit_amount`, `status`, `expires_at`, `created_at`, `updated_at`, `credit_error`, `idempotency_key` | (`requester_user_id`, `idempotency_key`) is unique. `credit_amount > 0`; the courier cannot be the requester; a courier is set exactly in the assigned states. Partial unique index `uq_orders_active_courier` on `courier_user_id` where status is `ACCEPTED` or `PICKED_UP`. |
+| `order_log` | `id`, `order_id`, `actor_user_id`, `action`, `outcome`, `previous_status`, `new_status`, `details`, `created_at` | Every change, written in the same transaction. `actor_user_id` is null for worker actions. |
+| `credit_jobs` | `id`, `order_id`, `operation`, `attempts`, `next_attempt_at`, `completed_at`, `failed_at`, `last_error_code`, `created_at` | Outbox of `RESERVE`, `RELEASE` and `TRANSFER` operations; one per order and operation. |
 
-For a Python setup, use Python 3.12 and install `requirements.txt`. Start
-`order-db` with the development override so port 5436 is published:
+## Background worker
 
-```sh
-docker compose -f compose.yaml -f compose.dev.yaml up -d order-db
-```
+`python -m app.worker` (the `order-worker` container) runs every second. It:
 
-Configure `order-service/.env.dev` (or environment variables), using
-`ORDER_DB_PASSWORD` from the root `.env`:
+- sends due credit jobs to Credit Service, one at a time while holding the
+  order's lock, after first reading the existing reservation; each operation
+  uses the key `order:<order_id>:<operation>`;
+- retries failures with exponential backoff (capped at 256 seconds); after
+  `CREDIT_JOB_MAX_ATTEMPTS` failures it sets `failed_at` and `credit_error` and
+  waits for an admin retry. Not enough credits rejects the order immediately;
+- expires `OPEN` orders whose deadline has passed;
+- auto-confirms `DELIVERED` orders after `AUTO_CONFIRM_RECEIPT_HOURS`.
 
-```dotenv
-DATABASE_URL=postgresql+psycopg://order_service:<ORDER_DB_PASSWORD>@localhost:5436/order_db
-JWT_PUBLIC_KEY_PATH=../user-service/keys/jwt-public.pem
-SUPPLIER_SERVICE_URL=http://localhost:8001
-CREDIT_SERVICE_URL=http://localhost:8002
-ORDER_SERVICE_KEY=<same secret configured in Credit Service>
-USER_SERVICE_URL=http://localhost:8000
-ORDER_CONTACT_SERVICE_KEY=<same separate secret configured in User Service>
-AUTO_CONFIRM_RECEIPT_HOURS=24
-CREDIT_JOB_MAX_ATTEMPTS=10
-```
+## Configuration
 
-From `order-service/`, run the API and worker in separate terminals:
+| Variable | Used by | Default |
+| --- | --- | --- |
+| `DATABASE_URL` | API, worker | required |
+| `JWT_PUBLIC_KEY_PATH` (or `JWT_PUBLIC_KEY`) | API | required |
+| `SUPPLIER_SERVICE_URL` | API | `http://localhost:8001` |
+| `USER_SERVICE_URL`, `ORDER_CONTACT_SERVICE_KEY` | API (contact lookup) | `http://localhost:8000`; key required |
+| `CREDIT_SERVICE_URL`, `ORDER_SERVICE_KEY` | worker | `http://localhost:8002`; key required |
+| `AUTO_CONFIRM_RECEIPT_HOURS` | API, worker | `24` |
+| `CREDIT_JOB_MAX_ATTEMPTS` | worker | `10` |
 
-```sh
-python -m uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8003
-python -m app.worker
-```
+## Upgrading an existing database
 
-Start the API first so its startup creates the tables. `create_all` creates
-missing tables; it does not migrate existing columns or constraints. Database
-credentials in Compose are for local development. No initial order data is needed.
+Tables are created on first start. A database created before the one-errand
+limit and the credit retry limit needs this once, with the API and worker
+stopped:
 
-## Verification limits
-
-The repository does not contain the full assignment rubric. This implementation
-follows the lifecycle and Credit/Supplier contracts in this repository. Container builds are not part of the Python and frontend regression checks. The frontend calls Order Service for lifecycle actions and polls
-orders and credits immediately after actions, every second while credit actions
-are pending, and every five seconds otherwise. It does not hold service credentials.
-
-## Review fixes and existing databases
-
-Before starting the updated API/worker against an existing database, apply
-`migrations/001_review_fixes.sql` with psql (`ON_ERROR_STOP=1`). Back up first.
-From the repository root, with the old API and worker stopped:
-
-```sh
+```bash
 docker compose exec -T order-db psql -U order_service -d order_db -v ON_ERROR_STOP=1 < order-service/migrations/001_review_fixes.sql
 ```
 
-The unique index intentionally fails if a courier already has multiple ACCEPTED
-or PICKED_UP orders; resolve those assignments before rerunning. New databases
-receive the columns and index through create_all. Do not reset persisted data.
+It fails without changing anything if a courier already holds two active
+errands; resolve those first.
 
-Only ACCEPTED and PICKED_UP count toward the one-errand limit; marking delivery
-frees the courier to accept another. Before pickup, Give Back Errand clears the
-courier and reopens the order without changing its deadline or reserved credit.
-Already overdue orders are picked up by normal expiry. Accepting and holding an
-errand past the deadline is still possible, and drops are logged with the courier
-ID. Disputes/admin cancellation after pickup remain future work for N1.
+## Tests
 
-The worker auto-confirms DELIVERED orders after `AUTO_CONFIRM_RECEIPT_HOURS`
-(default 24). It uses updated_at as delivery time, locks with SKIP LOCKED, queues
-one TRANSFER, and logs AUTO_CONFIRM_RECEIPT with no actor. Configure the same
-window in API and worker; the API supplies the UI confirmation deadline.
+From `order-service/`:
 
-Configure USER_SERVICE_URL and a distinct ORDER_CONTACT_SERVICE_KEY in the API
-and User Service (Compose does this). Only the requester/assigned courier may
-read contact during ACCEPTED, PICKED_UP, or DELIVERED. User Service's internal
-lookup returns the name and only the selected contact, including email when
-preferred; no preference returns a name with no contact. The API holds the order
-lock during lookup so unassignment/completion cannot race access checks.
+```bash
+pip install -r requirements.txt pytest httpx
+python -m pytest tests
+```
 
-Regression tests: `python -m pytest tests`. To include real PostgreSQL lifecycle
-and concurrency tests, set ORDER_TEST_DATABASE_URL to a disposable PostgreSQL
-database. Each test uses an isolated schema and removes it afterwards.
+Set `ORDER_TEST_DATABASE_URL` to a disposable PostgreSQL database to also run
+the lifecycle and concurrency tests; each test uses its own schema.

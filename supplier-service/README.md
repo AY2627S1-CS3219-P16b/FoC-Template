@@ -389,6 +389,7 @@ docker compose exec supplier-db psql -U supplier -d supplier_db -c 'SELECT s.nam
 From `supplier-service/`, run:
 
 ```bash
+pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 RUN_POSTGRES_TESTS=1 python -m unittest discover -s tests -v
 ```
