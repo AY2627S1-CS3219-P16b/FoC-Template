@@ -162,3 +162,27 @@ test("couriers can give back only an accepted errand and see contact and credit 
   assert.match(html, /@alice/);
   assert.match(html, /Credit processing needs admin attention/);
 });
+
+test("contact box names the other party from the viewer's side and links the contact", () => {
+  const accepted = { ...order, status: "ACCEPTED" };
+  const courier = { display_name: "Mei Lin", contact_preference: "TELEGRAM", contact: "@meilin" };
+  const forRequester = render("OrderCard", { order: { ...accepted, contact: courier }, helpRole: "requester" });
+  assert.match(forRequester, />Your courier</);
+  assert.match(forRequester, /<strong>Mei Lin<\/strong>/);
+  assert.match(forRequester, />Telegram</);
+  assert.match(forRequester, /href="https:\/\/t\.me\/meilin"/);
+  const requester = { display_name: "Alex Tan", contact_preference: null, contact: null };
+  const forCourier = render("OrderCard", { order: { ...accepted, contact: requester }, helpRole: "courier" });
+  assert.match(forCourier, />Your requester</);
+  assert.match(forCourier, /No contact method shared/);
+  assert.doesNotMatch(forCourier, /href=/);
+});
+
+test("delivery note sits under Deliver to, and details use the known name", () => {
+  const html = render("OrderCard", { order });
+  assert.match(html, />Items</);
+  assert.match(html, /class="route-note">Note: Meet at the lobby</);
+  assert.doesNotMatch(html, /<dt>Delivery instructions<\/dt>/);
+  const accepted = { ...order, status: "ACCEPTED", contact: { display_name: "Alex Tan", contact_preference: null, contact: null } };
+  assert.match(render("OrderCard", { order: accepted, helpRole: "courier" }), /<dt>Requester<\/dt><dd>Alex Tan<\/dd>/);
+});
