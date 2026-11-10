@@ -136,6 +136,9 @@ button { touch-action: manipulation; }
 .reward-chip { display: inline-flex; align-items: center; gap: 6px; margin-top: 1px; padding: 6px 9px; border: 1px solid #e6eaf2; border-radius: 8px; color: #526487; background: #fafbfe; font-size: 11px; font-weight: 650; white-space: nowrap; }
 .reward-chip .ui-icon { width: 15px; height: 15px; }
 .order-items { margin-top: 6px; margin-bottom: 20px; color: #667085; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.order-items-block { margin-top: 10px; }
+.order-items-block .order-items { margin-top: 0; color: #43516a; }
+.route-note { margin-top: 2px; color: #7a5a16; font-size: 12px; font-style: italic; }
 .order-route { display: grid; grid-template-columns: minmax(0, 1fr) 17px minmax(0, 1fr); gap: 12px; padding: 17px 0; border-top: 1px solid #eef1f6; border-bottom: 1px solid #eef1f6; }
 .route-stop { display: flex; align-items: flex-start; gap: 9px; min-width: 0; }
 .route-stop > div { min-width: 0; }
@@ -171,6 +174,16 @@ button { touch-action: manipulation; }
 .order-actions:empty { display: none; }
 .order-action-hint { color: #929bac; font-size: 12px; padding: 8px 0; }
 .order-notice { margin: 0 0 15px; padding: 10px 12px; font-size: 12px; }
+/* The other party's contact, laid out like the pickup and delivery stops. */
+.order-contact { display: flex; align-items: flex-start; gap: 9px; margin: 0 0 15px; padding: 10px 12px; border: 1px solid #e1e7f2; border-radius: 9px; background: #f8fafd; }
+.order-contact > div { min-width: 0; }
+.order-contact p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; color: #43516a; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.order-contact strong { color: #24324a; font-weight: 650; }
+.contact-method { padding: 1px 7px; border-radius: 999px; background: #eef1f8; color: #5a6a86; font-size: 11px; font-weight: 600; }
+.order-contact a { color: #3b54c9; font-weight: 600; text-decoration: none; }
+.order-contact a:hover { text-decoration: underline; }
+.contact-missing { color: #8a96ab; font-style: italic; }
+.contact-warning { margin-top: 6px; padding: 8px 10px; border: 1px solid #f1dfb5; border-radius: 8px; background: #fdf7e8; color: #7a5a16; font-size: 12px; line-height: 1.5; }
 .active-order-layout { max-width: 800px; }
 .delivery-steps { display: flex; list-style: none; padding: 20px 12px; margin-bottom: 18px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
 .delivery-steps li { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 7px; color: #9aa4b5; font-size: 11px; position: relative; }

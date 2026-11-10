@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { contactWarning } from "../utils/contactWarning.js";
 
 export default function ProfileSection({
   user,
@@ -154,6 +155,9 @@ export default function ProfileSection({
                 <option value="EMAIL">Email</option>
                 <option value="PHONE">Phone</option>
               </select>
+              {contactWarning(form) && (
+                <p className="contact-warning" role="status">{contactWarning(form)}</p>
+              )}
             </div>
             {field("Telegram Handle", "telegram_handle")}
             {field("Phone Number", "phone_number", "tel")}
