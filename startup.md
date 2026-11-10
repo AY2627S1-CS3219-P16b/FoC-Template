@@ -17,7 +17,7 @@ echo "ORDER_CONTACT_SERVICE_KEY=$(openssl rand -hex 32)" >> .env
 
 An Order database created before the review fixes also needs
 `order-service/migrations/001_review_fixes.sql` once; see the
-[Order Service README](order-service/README.md#review-fixes-and-existing-databases).
+[Order Service README](order-service/README.md#upgrading-an-existing-database).
 Add `ANTHROPIC_API_KEY` to enable FAQ answers; embeddings run locally and need
 no AWS credentials. See [FAQ setup](faq-service/README.md).
 
@@ -34,6 +34,14 @@ Skip if `.env` and `user-service/keys/` already exist.
    for k in USER_SERVICE_KEY ORDER_SERVICE_KEY ORDER_CONTACT_SERVICE_KEY USER_DB_PASSWORD SUPPLIER_DB_PASSWORD CREDIT_DB_PASSWORD ORDER_DB_PASSWORD FAQ_DB_PASSWORD; do
      echo "$k=$(openssl rand -hex 32)"
    done' > .env
+   ```
+
+   Optional, for FAQ answers: add an Anthropic API key. Without it the app
+   still runs, but the Help panel replies that support is temporarily
+   unavailable.
+
+   ```bash
+   echo "ANTHROPIC_API_KEY=<your-Anthropic-API-key>" >> .env
    ```
 
 2. Generate the JWT keys:
@@ -101,8 +109,7 @@ Use the same `-f` flags with `ps`, `stop` and `down`.
 
 The sections below cover running User Service, Supplier Service and the
 frontend on the host, with Docker providing the databases through the
-development override. Run Credit, Order and FAQ with Docker as above, or see
-their own READMEs.
+development override. Run Credit, Order and FAQ with Docker as above.
 
 ## Prerequisites
 
