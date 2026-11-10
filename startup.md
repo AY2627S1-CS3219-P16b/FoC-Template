@@ -36,6 +36,14 @@ Skip if `.env` and `user-service/keys/` already exist.
    done' > .env
    ```
 
+   Optional, for FAQ answers: add an Anthropic API key. Without it the app
+   still runs, but the Help panel replies that support is temporarily
+   unavailable.
+
+   ```bash
+   echo "ANTHROPIC_API_KEY=<your-Anthropic-API-key>" >> .env
+   ```
+
 2. Generate the JWT keys:
 
    ```bash
