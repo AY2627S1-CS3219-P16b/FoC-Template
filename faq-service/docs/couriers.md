@@ -55,11 +55,6 @@ has passed, it expires shortly and the credit is returned. After pickup you
 cannot give it back. Dispute handling and admin cancellation after pickup are
 future work; only accept errands you can complete.
 
-## Do I pay for the items?
-
-FoC does not handle payment for the items themselves: paying the store is
-outside the platform. Credits are only the reward for completing the errand.
-
 ## Can I see the requester's contact details?
 
 After acceptance, your Active Assignment shows the requester's display name

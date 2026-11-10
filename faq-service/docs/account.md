@@ -4,7 +4,8 @@
 
 Open "Profile". You can change your display name, contact preference, Telegram
 handle, phone number and profile picture URL. Your email address cannot be
-changed.
+changed. Choose a preferred contact method and fill in that detail, so the
+other person on an accepted errand can reach you; only that method is shared.
 
 ## What information is visible to other students?
 
